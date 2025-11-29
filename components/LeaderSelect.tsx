@@ -72,14 +72,60 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
   // QRコード読み取り（クライアントサイドで処理）
   const handleQrUpload = async (file: File) => {
     try {
-      // Canvas APIを使って画像を読み込み
       const img = new Image();
       const url = URL.createObjectURL(file);
       
       img.onload = () => {
+        // 複数のサイズ・処理でQRコード検出を試みる
+        const tryDecode = (
+          canvas: HTMLCanvasElement, 
+          ctx: CanvasRenderingContext2D,
+          width: number,
+          height: number,
+          invert: boolean = false,
+          threshold: boolean = false
+        ): string | null => {
+          canvas.width = width;
+          canvas.height = height;
+          
+          // 白背景で塗りつぶし
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          
+          // 画像を描画
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          let imageData = ctx.getImageData(0, 0, width, height);
+          const data = imageData.data;
+          
+          // 二値化処理（コントラストを上げる）
+          if (threshold) {
+            for (let i = 0; i < data.length; i += 4) {
+              const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+              const val = avg > 128 ? 255 : 0;
+              data[i] = val;     // R
+              data[i + 1] = val; // G
+              data[i + 2] = val; // B
+            }
+          }
+          
+          // 色反転（黒白反転したQRコード対策）
+          if (invert) {
+            for (let i = 0; i < data.length; i += 4) {
+              data[i] = 255 - data[i];         // R
+              data[i + 1] = 255 - data[i + 1]; // G
+              data[i + 2] = 255 - data[i + 2]; // B
+            }
+          }
+          
+          const code = jsQR(data, width, height, {
+            inversionAttempts: 'attemptBoth',
+          });
+          
+          return code?.data || null;
+        };
+        
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         
         if (!ctx) {
@@ -88,18 +134,42 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
           return;
         }
         
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let result: string | null = null;
         
-        // jsQRでデコード
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        // 様々なサイズと処理で試行
+        const sizes = [
+          { w: img.width, h: img.height },           // オリジナルサイズ
+          { w: 800, h: Math.round(800 * img.height / img.width) },  // 800px幅
+          { w: 600, h: Math.round(600 * img.height / img.width) },  // 600px幅
+          { w: 400, h: Math.round(400 * img.height / img.width) },  // 400px幅
+          { w: 1200, h: Math.round(1200 * img.height / img.width) }, // 1200px幅（大きめ）
+        ];
+        
+        // 各サイズで試行
+        for (const size of sizes) {
+          // 通常
+          result = tryDecode(canvas, ctx, size.w, size.h, false, false);
+          if (result) break;
+          
+          // 二値化
+          result = tryDecode(canvas, ctx, size.w, size.h, false, true);
+          if (result) break;
+          
+          // 反転
+          result = tryDecode(canvas, ctx, size.w, size.h, true, false);
+          if (result) break;
+          
+          // 二値化 + 反転
+          result = tryDecode(canvas, ctx, size.w, size.h, true, true);
+          if (result) break;
+        }
         
         URL.revokeObjectURL(url);
         
-        if (code) {
-          onImport(code.data);
+        if (result) {
+          onImport(result);
         } else {
-          alert('QRコードが検出されませんでした');
+          alert('QRコードが検出されませんでした。\n画像が鮮明でない、またはQRコードが小さすぎる可能性があります。');
         }
       };
       

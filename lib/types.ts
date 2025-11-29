@@ -34,6 +34,7 @@ export interface FilterOptions {
   free_words: string;
   leader_colors: string[];  // デッキ作成時のリーダー色制限
   parallel_mode: 'normal' | 'parallel' | 'both';
+  has_trigger: boolean | null;  // トリガーフィルター（null=全て, true=あり, false=なし）
 }
 
 // デッキの型定義
@@ -100,4 +101,5 @@ export const DEFAULT_FILTER_OPTIONS: FilterOptions = {
   free_words: '',
   leader_colors: [],
   parallel_mode: 'normal',
+  has_trigger: null,  // null = 全て表示
 };

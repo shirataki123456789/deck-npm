@@ -224,6 +224,27 @@ export default function FilterPanel({
         </div>
       </div>
       
+      {/* トリガー */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          トリガー
+        </label>
+        <div className="flex flex-wrap gap-1">
+          <button
+            onClick={() => updateFilter({ has_trigger: filter.has_trigger === null ? true : (filter.has_trigger === true ? false : null) })}
+            className={`px-3 py-1.5 text-sm rounded border transition-colors ${
+              filter.has_trigger === null
+                ? 'bg-gray-200 text-gray-700 border-gray-300'
+                : filter.has_trigger === true
+                ? 'bg-orange-500 text-white border-orange-500'
+                : 'bg-gray-500 text-white border-gray-500'
+            }`}
+          >
+            {filter.has_trigger === null ? '全て' : filter.has_trigger ? 'トリガーあり' : 'トリガーなし'}
+          </button>
+        </div>
+      </div>
+      
       {/* コスト */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -410,6 +431,7 @@ export default function FilterPanel({
           free_words: '',
           leader_colors: filter.leader_colors, // リーダー色は維持
           parallel_mode: 'normal',
+          has_trigger: null,
         })}
         className="w-full btn btn-secondary"
       >

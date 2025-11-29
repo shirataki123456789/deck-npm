@@ -305,6 +305,13 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
     });
   }
   
+  // 12) トリガーフィルタ
+  if (options.has_trigger === true) {
+    result = result.filter(c => c.trigger && c.trigger.trim() !== '' && c.trigger !== '-');
+  } else if (options.has_trigger === false) {
+    result = result.filter(c => !c.trigger || c.trigger.trim() === '' || c.trigger === '-');
+  }
+  
   // ソートして返す
   return sortCards(result);
 }

@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, UNLIMITED_CARDS } from '@/lib/types';
+import ImageModal from './ImageModal';
 
 interface CardGridProps {
   cards: Card[];
@@ -23,31 +25,35 @@ export default function CardGrid({
   getCardCount,
   canAddCard,
 }: CardGridProps) {
-  // 指定列数に応じたグリッドクラス
-  // 画面幅に関係なく指定列数で表示（カードは自動縮小）
-  const gridClass = `grid-cols-${Math.min(colsCount, 12)}`;
+  const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
   
   return (
-    <div 
-      className="grid gap-1 sm:gap-2"
-      style={{ 
-        gridTemplateColumns: `repeat(${colsCount}, minmax(0, 1fr))` 
-      }}
-    >
-      {cards.map((card, idx) => (
-        <CardItem
-          key={`${card.card_id}-${idx}`}
-          card={card}
-          onAdd={onCardClick}
-          onRemove={onCardRemove}
-          onReset={onCardReset}
-          showAddButton={showAddButton}
-          count={getCardCount?.(card.card_id)}
-          canAdd={canAddCard?.(card.card_id)}
-          colsCount={colsCount}
-        />
-      ))}
-    </div>
+    <>
+      <div 
+        className="grid gap-1 sm:gap-2"
+        style={{ 
+          gridTemplateColumns: `repeat(${colsCount}, minmax(0, 1fr))` 
+        }}
+      >
+        {cards.map((card, idx) => (
+          <CardItem
+            key={`${card.card_id}-${idx}`}
+            card={card}
+            onAdd={onCardClick}
+            onRemove={onCardRemove}
+            onReset={onCardReset}
+            onZoom={() => setZoomedCard(card)}
+            showAddButton={showAddButton}
+            count={getCardCount?.(card.card_id)}
+            canAdd={canAddCard?.(card.card_id)}
+            colsCount={colsCount}
+          />
+        ))}
+      </div>
+      
+      {/* 画像拡大モーダル */}
+      <ImageModal card={zoomedCard} onClose={() => setZoomedCard(null)} />
+    </>
   );
 }
 
@@ -56,6 +62,7 @@ interface CardItemProps {
   onAdd?: (card: Card) => void;
   onRemove?: (card: Card) => void;
   onReset?: (card: Card) => void;
+  onZoom?: () => void;
   showAddButton?: boolean;
   count?: number;
   canAdd?: boolean;
@@ -67,6 +74,7 @@ function CardItem({
   onAdd,
   onRemove,
   onReset,
+  onZoom,
   showAddButton = false,
   count,
   canAdd = true,
@@ -108,6 +116,18 @@ function CardItem({
           loading="lazy"
           decoding="async"
         />
+        
+        {/* 拡大ボタン */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onZoom?.(); }}
+          className={`absolute bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition-opacity ${
+            isCompact 
+              ? 'bottom-0.5 left-0.5 w-5 h-5 text-[10px]' 
+              : 'bottom-1 left-1 w-7 h-7 text-sm'
+          } flex items-center justify-center`}
+        >
+          🔍
+        </button>
         
         {/* パラレルマーク */}
         {card.is_parallel && (
