@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, FilterOptions, DEFAULT_FILTER_OPTIONS, COLOR_ORDER } from '@/lib/types';
 import jsQR from 'jsqr';
 
@@ -15,7 +15,8 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
   const [parallelMode, setParallelMode] = useState<'normal' | 'parallel' | 'both'>('normal');
   const [importText, setImportText] = useState('');
   const [showImport, setShowImport] = useState(false);
-  const [qrFile, setQrFile] = useState<File | null>(null);
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [colsCount, setColsCount] = useState(4);
   
   // リーダー一覧を取得
   const fetchLeaders = useCallback(async () => {
@@ -43,6 +44,30 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
   useEffect(() => {
     fetchLeaders();
   }, [fetchLeaders]);
+  
+  // 色フィルター適用
+  const filteredLeaders = useMemo(() => {
+    if (selectedColors.length === 0) return leaders;
+    return leaders.filter(leader => 
+      leader.color.some(c => selectedColors.includes(c))
+    );
+  }, [leaders, selectedColors]);
+  
+  // 利用可能な色一覧
+  const availableColors = useMemo(() => {
+    const colors = new Set<string>();
+    leaders.forEach(leader => leader.color.forEach(c => colors.add(c)));
+    return COLOR_ORDER.filter(c => colors.has(c));
+  }, [leaders]);
+  
+  // 色の選択/解除
+  const toggleColor = (color: string) => {
+    setSelectedColors(prev => 
+      prev.includes(color) 
+        ? prev.filter(c => c !== color)
+        : [...prev, color]
+    );
+  };
   
   // QRコード読み取り（クライアントサイドで処理）
   const handleQrUpload = async (file: File) => {
@@ -90,8 +115,11 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
     }
   };
   
+  // コンパクト表示判定
+  const isCompact = colsCount >= 5;
+  
   return (
-    <div>
+    <div className="pb-20 lg:pb-4">
       <h2 className="text-xl font-bold mb-4">① リーダーを選択</h2>
       
       {/* インポートセクション */}
@@ -153,26 +181,81 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
         )}
       </div>
       
-      {/* パラレルモード選択 */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          リーダーバージョン
-        </label>
-        <div className="flex gap-2">
-          {(['normal', 'parallel', 'both'] as const).map(mode => (
-            <button
-              key={mode}
-              onClick={() => setParallelMode(mode)}
-              className={`px-4 py-2 rounded border transition-colors ${
-                parallelMode === mode
-                  ? 'bg-yellow-500 text-white border-yellow-500'
-                  : 'bg-white border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              {mode === 'normal' ? '通常カードのみ' : mode === 'parallel' ? 'パラレルカードのみ' : '両方表示'}
-            </button>
-          ))}
+      {/* フィルター・表示設定 */}
+      <div className="bg-white rounded-lg shadow p-4 mb-4">
+        {/* パラレルモード選択 */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            リーダーバージョン
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {(['normal', 'parallel', 'both'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setParallelMode(mode)}
+                className={`px-3 py-1.5 rounded border text-sm transition-colors ${
+                  parallelMode === mode
+                    ? 'bg-yellow-500 text-white border-yellow-500'
+                    : 'bg-white border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {mode === 'normal' ? '通常のみ' : mode === 'parallel' ? 'パラレルのみ' : '両方'}
+              </button>
+            ))}
+          </div>
         </div>
+        
+        {/* 色フィルター */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            色で絞り込み
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {availableColors.map(color => (
+              <button
+                key={color}
+                onClick={() => toggleColor(color)}
+                className={`color-badge color-badge-${color} cursor-pointer transition-opacity ${
+                  selectedColors.length === 0 || selectedColors.includes(color)
+                    ? 'opacity-100'
+                    : 'opacity-40'
+                } ${selectedColors.includes(color) ? 'ring-2 ring-offset-1 ring-gray-800' : ''}`}
+              >
+                {color}
+              </button>
+            ))}
+            {selectedColors.length > 0 && (
+              <button
+                onClick={() => setSelectedColors([])}
+                className="text-xs text-gray-500 hover:text-gray-700 ml-2"
+              >
+                クリア
+              </button>
+            )}
+          </div>
+        </div>
+        
+        {/* 列数選択 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            表示列数
+          </label>
+          <select
+            value={colsCount}
+            onChange={(e) => setColsCount(Number(e.target.value))}
+            className="border rounded px-3 py-2 text-sm"
+          >
+            <option value={3}>3列</option>
+            <option value={4}>4列</option>
+            <option value={5}>5列（コンパクト）</option>
+            <option value={6}>6列（コンパクト）</option>
+          </select>
+        </div>
+      </div>
+      
+      {/* リーダー数表示 */}
+      <div className="mb-3 text-sm text-gray-600">
+        表示中: {filteredLeaders.length} / {leaders.length} 件
       </div>
       
       {/* リーダー一覧 */}
@@ -181,8 +264,11 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-          {leaders.map((leader) => (
+        <div 
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${colsCount}, minmax(0, 1fr))` }}
+        >
+          {filteredLeaders.map((leader) => (
             <div
               key={leader.card_id}
               className="bg-white rounded-lg shadow overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
@@ -196,31 +282,27 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
                   loading="lazy"
                 />
                 {leader.is_parallel && (
-                  <div className="absolute top-1 left-1 bg-yellow-400 text-black text-xs px-1.5 py-0.5 rounded font-bold">
-                    ✨P
+                  <div className={`absolute top-0.5 left-0.5 bg-yellow-400 text-black font-bold rounded ${
+                    isCompact ? 'text-[8px] px-0.5' : 'text-xs px-1.5 py-0.5'
+                  }`}>
+                    {isCompact ? 'P' : '✨P'}
                   </div>
                 )}
               </div>
-              <div className="p-2">
-                <div className="text-sm font-medium truncate">{leader.name}</div>
-                <div className="text-xs text-gray-500">{leader.card_id}</div>
-                <div className="flex gap-1 mt-1">
-                  {leader.color.map(c => (
-                    <span key={c} className={`color-badge color-badge-${c}`}>
-                      {c}
-                    </span>
-                  ))}
+              {/* カード情報（コンパクト時は非表示） */}
+              {!isCompact && (
+                <div className="p-2">
+                  <div className="text-sm font-medium truncate">{leader.name}</div>
+                  <div className="text-xs text-gray-500">{leader.card_id}</div>
+                  <div className="flex gap-1 mt-1">
+                    {leader.color.map(c => (
+                      <span key={c} className={`color-badge color-badge-${c}`}>
+                        {c}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <button
-                  className="w-full mt-2 btn btn-primary btn-sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelect(leader);
-                  }}
-                >
-                  選択
-                </button>
-              </div>
+              )}
             </div>
           ))}
         </div>

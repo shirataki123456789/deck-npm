@@ -138,13 +138,13 @@ export default function SearchMode() {
       
       {/* メインコンテンツ */}
       <div className="flex-1 p-4">
-        {/* モバイル用フィルタボタン */}
-        <div className="lg:hidden mb-4">
+        {/* モバイル用フィルタボタン（丸アイコン） */}
+        <div className="lg:hidden fixed bottom-20 right-4 z-30">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="btn btn-secondary w-full"
+            className="btn btn-primary shadow-lg rounded-full w-14 h-14 flex items-center justify-center text-xl"
           >
-            🔍 フィルタを開く
+            🔍
           </button>
         </div>
         

@@ -298,8 +298,22 @@ export default function DeckMode() {
         {/* カード追加画面 */}
         {view === 'add_cards' && leaderCard && (
           <div className="flex gap-4">
-            {/* モバイル用フィルタボタン */}
-            <div className="lg:hidden fixed bottom-20 right-4 z-30">
+            {/* モバイル用丸ボタン */}
+            <div className="lg:hidden fixed bottom-20 right-4 z-30 flex flex-col gap-2">
+              {/* デッキ表示ボタン */}
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="btn btn-success shadow-lg rounded-full w-14 h-14 flex items-center justify-center relative"
+              >
+                🧾
+                {/* 枚数バッジ */}
+                <span className={`absolute -top-1 -right-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                  totalCards === 50 ? 'bg-green-600 text-white' : totalCards > 50 ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
+                }`}>
+                  {totalCards}
+                </span>
+              </button>
+              {/* フィルタボタン */}
               <button
                 onClick={() => setFilterSidebarOpen(true)}
                 className="btn btn-primary shadow-lg rounded-full w-14 h-14 flex items-center justify-center"
