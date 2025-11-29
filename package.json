@@ -14,8 +14,7 @@
     "react-dom": "^18.3.1",
     "qrcode": "^1.5.3",
     "jsqr": "^1.4.0",
-    "csv-parse": "^5.5.5",
-    "sharp": "^0.33.3"
+    "csv-parse": "^5.5.5"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",

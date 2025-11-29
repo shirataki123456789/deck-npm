@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { FilterOptions, COLOR_ORDER } from '@/lib/types';
 
 interface FilterMeta {
@@ -7,6 +8,7 @@ interface FilterMeta {
   types: string[];
   costs: number[];
   counters: number[];
+  powers: number[];
   attributes: string[];
   blocks: string[];
   features: string[];
@@ -18,6 +20,116 @@ interface FilterPanelProps {
   onChange: (filter: FilterOptions) => void;
   meta: FilterMeta;
   hideLeaderColors?: boolean;
+  hideLeaderType?: boolean;
+}
+
+// 展開可能な複数選択コンポーネント
+function ExpandableMultiSelect({
+  options,
+  selected,
+  onChange,
+  placeholder = '検索...',
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+  placeholder?: string;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  
+  const filteredOptions = useMemo(() => {
+    if (!searchText) return options;
+    const lower = searchText.toLowerCase();
+    return options.filter(opt => opt.toLowerCase().includes(lower));
+  }, [options, searchText]);
+  
+  const toggleItem = (item: string) => {
+    if (selected.includes(item)) {
+      onChange(selected.filter(s => s !== item));
+    } else {
+      onChange([...selected, item]);
+    }
+  };
+  
+  return (
+    <div className="border rounded bg-white">
+      {/* 選択中のアイテム表示 */}
+      {selected.length > 0 && (
+        <div className="p-2 border-b flex flex-wrap gap-1">
+          {selected.map(item => (
+            <span
+              key={item}
+              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded"
+            >
+              {item}
+              <button
+                onClick={() => toggleItem(item)}
+                className="hover:text-blue-600"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <button
+            onClick={() => onChange([])}
+            className="text-xs text-gray-500 hover:text-gray-700 ml-1"
+          >
+            全てクリア
+          </button>
+        </div>
+      )}
+      
+      {/* 展開ボタン */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full px-3 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50"
+      >
+        <span className="text-gray-600">
+          {isExpanded ? '閉じる' : `選択する (${options.length}件)`}
+        </span>
+        <span>{isExpanded ? '▲' : '▼'}</span>
+      </button>
+      
+      {/* 展開時のリスト */}
+      {isExpanded && (
+        <div className="border-t">
+          {/* 検索入力 */}
+          <div className="p-2 border-b">
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder={placeholder}
+              className="w-full border rounded px-2 py-1 text-sm"
+            />
+          </div>
+          
+          {/* オプションリスト */}
+          <div className="max-h-48 overflow-y-auto">
+            {filteredOptions.length === 0 ? (
+              <div className="p-2 text-sm text-gray-500">該当なし</div>
+            ) : (
+              filteredOptions.map(opt => (
+                <label
+                  key={opt}
+                  className="flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(opt)}
+                    onChange={() => toggleItem(opt)}
+                    className="mr-2"
+                  />
+                  <span className="truncate">{opt}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function FilterPanel({
@@ -25,6 +137,7 @@ export default function FilterPanel({
   onChange,
   meta,
   hideLeaderColors = true,
+  hideLeaderType = false,
 }: FilterPanelProps) {
   
   const toggleArrayItem = <T,>(arr: T[], item: T): T[] => {
@@ -37,6 +150,11 @@ export default function FilterPanel({
   const updateFilter = (partial: Partial<FilterOptions>) => {
     onChange({ ...filter, ...partial });
   };
+  
+  // タイプリストからLEADERを除外するかどうか
+  const displayTypes = hideLeaderType 
+    ? meta.types.filter(t => t !== 'LEADER')
+    : meta.types;
   
   return (
     <div className="space-y-4">
@@ -90,7 +208,7 @@ export default function FilterPanel({
           タイプ
         </label>
         <div className="flex flex-wrap gap-1">
-          {meta.types.map(type => (
+          {displayTypes.map(type => (
             <button
               key={type}
               onClick={() => updateFilter({ types: toggleArrayItem(filter.types, type) })}
@@ -158,6 +276,36 @@ export default function FilterPanel({
         </div>
       </div>
       
+      {/* パワー */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          パワー
+        </label>
+        <div className="flex flex-wrap gap-1">
+          {[0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000].map(power => (
+            <button
+              key={power}
+              onClick={() => updateFilter({ powers: toggleArrayItem(filter.powers, power) })}
+              className={`px-2 py-1 text-xs rounded border transition-colors ${
+                filter.powers.includes(power)
+                  ? 'bg-red-600 text-white border-red-600'
+                  : 'bg-white border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {power === 0 ? '0' : `${power / 1000}K`}
+            </button>
+          ))}
+          {filter.powers.length > 0 && (
+            <button
+              onClick={() => updateFilter({ powers: [] })}
+              className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+            >
+              クリア
+            </button>
+          )}
+        </div>
+      </div>
+      
       {/* 属性 */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -207,61 +355,27 @@ export default function FilterPanel({
       {/* 特徴 */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          特徴
+          特徴 {filter.features.length > 0 && `(${filter.features.length}件選択中)`}
         </label>
-        <select
-          multiple
-          value={filter.features}
-          onChange={(e) => {
-            const selected = Array.from(e.target.selectedOptions, opt => opt.value);
-            updateFilter({ features: selected });
-          }}
-          className="w-full border rounded px-3 py-2 h-32 text-sm"
-        >
-          {meta.features.map(feature => (
-            <option key={feature} value={feature}>
-              {feature}
-            </option>
-          ))}
-        </select>
-        {filter.features.length > 0 && (
-          <button
-            onClick={() => updateFilter({ features: [] })}
-            className="mt-1 text-xs text-gray-500 hover:text-gray-700"
-          >
-            選択をクリア
-          </button>
-        )}
+        <ExpandableMultiSelect
+          options={meta.features}
+          selected={filter.features}
+          onChange={(selected) => updateFilter({ features: selected })}
+          placeholder="特徴を検索..."
+        />
       </div>
       
       {/* シリーズID */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          入手シリーズ
+          入手シリーズ {filter.series_ids.length > 0 && `(${filter.series_ids.length}件選択中)`}
         </label>
-        <select
-          multiple
-          value={filter.series_ids}
-          onChange={(e) => {
-            const selected = Array.from(e.target.selectedOptions, opt => opt.value);
-            updateFilter({ series_ids: selected });
-          }}
-          className="w-full border rounded px-3 py-2 h-32 text-sm"
-        >
-          {meta.seriesIds.map(series => (
-            <option key={series} value={series}>
-              {series}
-            </option>
-          ))}
-        </select>
-        {filter.series_ids.length > 0 && (
-          <button
-            onClick={() => updateFilter({ series_ids: [] })}
-            className="mt-1 text-xs text-gray-500 hover:text-gray-700"
-          >
-            選択をクリア
-          </button>
-        )}
+        <ExpandableMultiSelect
+          options={meta.seriesIds}
+          selected={filter.series_ids}
+          onChange={(selected) => updateFilter({ series_ids: selected })}
+          placeholder="シリーズを検索..."
+        />
       </div>
       
       {/* フリーワード */}
@@ -288,6 +402,7 @@ export default function FilterPanel({
           types: [],
           costs: [],
           counters: [],
+          powers: [],
           attributes: [],
           blocks: [],
           features: [],

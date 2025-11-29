@@ -261,6 +261,13 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
     );
   }
   
+  // 6.5) パワーフィルタ
+  if (options.powers.length > 0) {
+    result = result.filter(c =>
+      options.powers.includes(c.power)
+    );
+  }
+  
   // 7) 属性フィルタ
   if (options.attributes.length > 0) {
     result = result.filter(c =>
@@ -310,6 +317,7 @@ export function getUniqueValues(cards: Card[]) {
   const types = new Set<string>();
   const costs = new Set<number>();
   const counters = new Set<number>();
+  const powers = new Set<number>();
   const attributes = new Set<string>();
   const blocks = new Set<string>();
   const features = new Set<string>();
@@ -320,6 +328,7 @@ export function getUniqueValues(cards: Card[]) {
     if (card.type) types.add(card.type);
     costs.add(card.cost);
     counters.add(card.counter);
+    if (card.power >= 0) powers.add(card.power);
     if (card.attribute && card.attribute !== '-') {
       splitAndTrim(card.attribute).forEach(a => attributes.add(a));
     }
@@ -333,6 +342,7 @@ export function getUniqueValues(cards: Card[]) {
     types: Array.from(types).sort((a, b) => (TYPE_PRIORITY[a] ?? 999) - (TYPE_PRIORITY[b] ?? 999)),
     costs: Array.from(costs).sort((a, b) => a - b),
     counters: Array.from(counters).sort((a, b) => a - b),
+    powers: Array.from(powers).sort((a, b) => a - b),
     attributes: Array.from(attributes).sort(),
     blocks: Array.from(blocks).sort(),
     features: Array.from(features).sort(),

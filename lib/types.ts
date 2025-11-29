@@ -26,6 +26,7 @@ export interface FilterOptions {
   types: string[];
   costs: number[];
   counters: number[];
+  powers: number[];      // パワーフィルタ追加
   attributes: string[];
   blocks: string[];
   features: string[];
@@ -91,6 +92,7 @@ export const DEFAULT_FILTER_OPTIONS: FilterOptions = {
   types: [],
   costs: [],
   counters: [],
+  powers: [],
   attributes: [],
   blocks: [],
   features: [],

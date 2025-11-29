@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Deck, UNLIMITED_CARDS } from '@/lib/types';
 
 interface DeckPreviewProps {
   deck: Deck;
   leaderCard: Card;
+  allCards: Card[];  // 親からカードデータを受け取る
   onAddCards: () => void;
   onChangeLeader: () => void;
   onRemoveCard: (cardId: string) => void;
@@ -20,93 +21,79 @@ interface DeckCardInfo {
 export default function DeckPreview({
   deck,
   leaderCard,
+  allCards,
   onAddCards,
   onChangeLeader,
   onRemoveCard,
   onAddCard,
 }: DeckPreviewProps) {
-  const [deckCards, setDeckCards] = useState<DeckCardInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sortedCardIds, setSortedCardIds] = useState<string[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const lastCardIdsRef = useRef<string>('');
   
-  // デッキのカード情報を取得してソート
+  // カードIDリストが変わった時だけソート順を取得
   useEffect(() => {
-    const fetchDeckCards = async () => {
-      setLoading(true);
+    const cardIds = Object.keys(deck.cards);
+    const cardIdsStr = cardIds.sort().join(',');
+    
+    // カードIDのセットが変わっていない場合はスキップ
+    if (cardIdsStr === lastCardIdsRef.current && !initialLoading) {
+      return;
+    }
+    
+    if (cardIds.length === 0) {
+      setSortedCardIds([]);
+      setInitialLoading(false);
+      return;
+    }
+    
+    // 初回のみローディング表示、それ以降は表示を維持
+    const fetchSort = async () => {
       try {
-        // カードIDリストを作成
-        const cardIds = Object.keys(deck.cards);
-        if (cardIds.length === 0) {
-          setDeckCards([]);
-          setLoading(false);
-          return;
-        }
-        
-        // カード情報を取得
-        const res = await fetch('/api/cards', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            colors: [],
-            types: [],
-            costs: [],
-            counters: [],
-            attributes: [],
-            blocks: [],
-            features: [],
-            series_ids: [],
-            free_words: '',
-            leader_colors: [],
-            parallel_mode: 'both',
-          }),
-        });
-        const data = await res.json();
-        const allCards: Card[] = data.cards || [];
-        
-        // デッキ内のカード情報を構築
-        const deckCardInfos: DeckCardInfo[] = [];
-        cardIds.forEach(cardId => {
-          const card = allCards.find(c => c.card_id === cardId);
-          if (card) {
-            deckCardInfos.push({
-              card,
-              count: deck.cards[cardId],
-            });
-          }
-        });
-        
-        // サーバーでソート
-        const sortRes = await fetch('/api/deck', {
+        const res = await fetch('/api/deck', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'sort',
-            card_ids: deckCardInfos.map(d => d.card.card_id),
+            card_ids: cardIds,
           }),
         });
-        const sortData = await sortRes.json();
+        const data = await res.json();
         
-        if (sortData.card_ids_sorted) {
-          // ソート順に並べ替え
-          const sortedCards: DeckCardInfo[] = [];
-          sortData.card_ids_sorted.forEach((id: string) => {
-            const info = deckCardInfos.find(d => d.card.card_id === id);
-            if (info) {
-              sortedCards.push(info);
-            }
-          });
-          setDeckCards(sortedCards);
-        } else {
-          setDeckCards(deckCardInfos);
+        if (data.card_ids_sorted) {
+          setSortedCardIds(data.card_ids_sorted);
+          lastCardIdsRef.current = cardIdsStr;
         }
       } catch (error) {
-        console.error('Fetch deck cards error:', error);
+        console.error('Sort error:', error);
+        setSortedCardIds(cardIds);
       } finally {
-        setLoading(false);
+        setInitialLoading(false);
       }
     };
     
-    fetchDeckCards();
-  }, [deck.cards]);
+    fetchSort();
+  }, [Object.keys(deck.cards).sort().join(','), initialLoading]);
+  
+  // デッキカード情報をメモ化（枚数変更時も再計算されるが、APIコールなし）
+  const deckCards = useMemo(() => {
+    const result: DeckCardInfo[] = [];
+    
+    // ソート順が取得できている場合はその順序で
+    const idsToUse = sortedCardIds.length > 0 ? sortedCardIds : Object.keys(deck.cards);
+    
+    idsToUse.forEach(cardId => {
+      const count = deck.cards[cardId];
+      if (!count || count <= 0) return;
+      
+      const card = allCards.find(c => c.card_id === cardId);
+      if (card) {
+        result.push({ card, count });
+      }
+    });
+    
+    return result;
+  }, [deck.cards, sortedCardIds, allCards]);
   
   const totalCards = Object.values(deck.cards).reduce((sum, count) => sum + count, 0);
   
@@ -153,7 +140,7 @@ export default function DeckPreview({
           </span>
         </div>
         
-        {loading ? (
+        {initialLoading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>
@@ -162,42 +149,45 @@ export default function DeckPreview({
             デッキにカードが追加されていません
           </p>
         ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
-            {deckCards.map(({ card, count }, idx) => (
-              <div key={`${card.card_id}-${idx}`} className="relative">
-                <img
-                  src={card.image_url}
-                  alt={card.name}
-                  className="w-full rounded"
-                />
-                {/* 枚数バッジ */}
-                <div className="absolute top-1 right-1 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-                  ×{count}
-                </div>
-                {/* パラレルマーク */}
-                {card.is_parallel && (
-                  <div className="absolute top-1 left-1 bg-yellow-400 text-black text-xs px-1 py-0.5 rounded font-bold">
-                    ✨P
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-2">
+            {deckCards.map(({ card, count }, idx) => {
+              const isUnlimited = UNLIMITED_CARDS.includes(card.card_id);
+              return (
+                <div key={`${card.card_id}-${idx}`} className="relative">
+                  <img
+                    src={card.image_url}
+                    alt={card.name}
+                    className="w-full rounded"
+                  />
+                  {/* 枚数バッジ */}
+                  <div className="absolute top-1 right-1 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+                    ×{count}
                   </div>
-                )}
-                {/* 操作ボタン */}
-                <div className="absolute bottom-0 left-0 right-0 flex">
-                  <button
-                    onClick={() => onAddCard(card)}
-                    disabled={!UNLIMITED_CARDS.includes(card.card_id) && count >= 4}
-                    className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-xs py-1"
-                  >
-                    ＋
-                  </button>
-                  <button
-                    onClick={() => onRemoveCard(card.card_id)}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs py-1"
-                  >
-                    −
-                  </button>
+                  {/* パラレルマーク */}
+                  {card.is_parallel && (
+                    <div className="absolute top-1 left-1 bg-yellow-400 text-black text-xs px-1 py-0.5 rounded font-bold">
+                      ✨P
+                    </div>
+                  )}
+                  {/* 操作ボタン */}
+                  <div className="absolute bottom-0 left-0 right-0 flex">
+                    <button
+                      onClick={() => onAddCard(card)}
+                      disabled={!isUnlimited && count >= 4}
+                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-xs py-1"
+                    >
+                      ＋
+                    </button>
+                    <button
+                      onClick={() => onRemoveCard(card.card_id)}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs py-1"
+                    >
+                      −
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

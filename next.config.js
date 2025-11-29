@@ -14,8 +14,6 @@ const nextConfig = {
       },
     ],
   },
-  // Vercel serverless function timeout (Pro plan: 60s, Hobby: 10s)
-  serverExternalPackages: ['sharp'],
 };
 
 module.exports = nextConfig;

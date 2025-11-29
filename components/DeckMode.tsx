@@ -15,6 +15,7 @@ interface FilterMeta {
   types: string[];
   costs: number[];
   counters: number[];
+  powers: number[];
   attributes: string[];
   blocks: string[];
   features: string[];
@@ -33,8 +34,10 @@ export default function DeckMode() {
   // 画面状態
   const [view, setView] = useState<DeckView>('leader');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
   
   // カード検索関連
+  const [allCards, setAllCards] = useState<Card[]>([]); // 全カードのキャッシュ
   const [filteredCards, setFilteredCards] = useState<Card[]>([]);
   const [filter, setFilter] = useState<FilterOptions>({
     ...DEFAULT_FILTER_OPTIONS,
@@ -44,6 +47,27 @@ export default function DeckMode() {
   const [loading, setLoading] = useState(false);
   const [colsCount, setColsCount] = useState(3);
   
+  // 初回に全カードを取得してキャッシュ
+  useEffect(() => {
+    const fetchAllCards = async () => {
+      try {
+        const res = await fetch('/api/cards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...DEFAULT_FILTER_OPTIONS,
+            parallel_mode: 'both',
+          }),
+        });
+        const data = await res.json();
+        setAllCards(data.cards || []);
+      } catch (error) {
+        console.error('Fetch all cards error:', error);
+      }
+    };
+    fetchAllCards();
+  }, []);
+  
   // フィルタメタデータを取得
   useEffect(() => {
     fetch('/api/cards')
@@ -51,9 +75,10 @@ export default function DeckMode() {
       .then(data => {
         setFilterMeta({
           colors: data.colors || [],
-          types: (data.types || []).filter((t: string) => t !== 'LEADER'),
+          types: data.types || [], // 全タイプを取得（FilterPanel側でLEADERを除外）
           costs: data.costs || [],
           counters: data.counters || [],
+          powers: data.powers || [],
           attributes: data.attributes || [],
           blocks: data.blocks || [],
           features: data.features || [],
@@ -174,29 +199,41 @@ export default function DeckMode() {
       });
       const data = await res.json();
       
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      
       if (data.deck) {
         setDeck(data.deck);
         
-        // リーダーカード情報を取得
-        if (data.leader_info) {
-          const leaderRes = await fetch('/api/cards', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ...DEFAULT_FILTER_OPTIONS,
-              types: ['LEADER'],
-              free_words: data.deck.leader,
-              parallel_mode: 'both',
-            }),
-          });
-          const leaderData = await leaderRes.json();
-          const foundLeader = leaderData.cards?.find((c: Card) => c.card_id === data.deck.leader);
+        // リーダーカード情報を取得（allCardsから検索、またはAPIから取得）
+        if (data.deck.leader) {
+          // まずキャッシュされたallCardsから検索
+          let foundLeader = allCards.find(c => c.card_id === data.deck.leader);
+          
+          // 見つからない場合はAPIから取得
+          if (!foundLeader) {
+            const leaderRes = await fetch('/api/cards', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...DEFAULT_FILTER_OPTIONS,
+                types: ['LEADER'],
+                parallel_mode: 'both',
+              }),
+            });
+            const leaderData = await leaderRes.json();
+            foundLeader = leaderData.cards?.find((c: Card) => c.card_id === data.deck.leader);
+          }
+          
           if (foundLeader) {
             setLeaderCard(foundLeader);
+            setView('preview');
+          } else {
+            alert('リーダーカードが見つかりませんでした: ' + data.deck.leader);
           }
         }
-        
-        setView('preview');
       }
     } catch (error) {
       console.error('Import error:', error);
@@ -241,6 +278,7 @@ export default function DeckMode() {
           <DeckPreview
             deck={deck}
             leaderCard={leaderCard}
+            allCards={allCards}
             onAddCards={() => setView('add_cards')}
             onChangeLeader={handleChangeLeader}
             onRemoveCard={handleRemoveCard}
@@ -250,149 +288,124 @@ export default function DeckMode() {
         
         {/* カード追加画面 */}
         {view === 'add_cards' && leaderCard && (
-          <div>
-            <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <h2 className="text-lg font-bold">➕ カードを追加</h2>
-                <p className="text-sm text-gray-600">
-                  リーダー: {leaderCard.name}（{leaderCard.color.join('/')}）
-                  - リーダーの色と同じカードのみが表示されます
-                </p>
-              </div>
+          <div className="flex gap-4">
+            {/* モバイル用フィルタボタン */}
+            <div className="lg:hidden fixed bottom-4 right-4 z-30">
               <button
-                onClick={() => setView('preview')}
-                className="btn btn-secondary"
+                onClick={() => setFilterSidebarOpen(true)}
+                className="btn btn-primary shadow-lg rounded-full w-14 h-14 flex items-center justify-center"
               >
-                🔙 プレビューに戻る
+                🔍
               </button>
             </div>
             
-            {/* フィルタ */}
-            <div className="bg-white rounded-lg shadow p-4 mb-4">
-              <h3 className="font-bold mb-3">🔍 カード検索フィルタ</h3>
-              {filterMeta && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* タイプ */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">タイプ</label>
-                    <div className="flex flex-wrap gap-1">
-                      {filterMeta.types.map(type => (
-                        <button
-                          key={type}
-                          onClick={() => {
-                            const newTypes = filter.types.includes(type)
-                              ? filter.types.filter(t => t !== type)
-                              : [...filter.types, type];
-                            setFilter(prev => ({ ...prev, types: newTypes }));
-                          }}
-                          className={`px-2 py-1 text-xs rounded border ${
-                            filter.types.includes(type)
-                              ? 'bg-green-600 text-white'
-                              : 'bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* コスト */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">コスト</label>
-                    <div className="flex flex-wrap gap-1">
-                      {filterMeta.costs.slice(0, 11).map(cost => (
-                        <button
-                          key={cost}
-                          onClick={() => {
-                            const newCosts = filter.costs.includes(cost)
-                              ? filter.costs.filter(c => c !== cost)
-                              : [...filter.costs, cost];
-                            setFilter(prev => ({ ...prev, costs: newCosts }));
-                          }}
-                          className={`w-7 h-7 text-xs rounded border ${
-                            filter.costs.includes(cost)
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          {cost}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* フリーワード */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">フリーワード</label>
-                    <input
-                      type="text"
-                      value={filter.free_words}
-                      onChange={(e) => setFilter(prev => ({ ...prev, free_words: e.target.value }))}
-                      placeholder="カード名・テキスト・特徴など"
-                      className="w-full border rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  
-                  {/* パラレルモード */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">カードバージョン</label>
-                    <div className="flex gap-1">
-                      {(['normal', 'parallel', 'both'] as const).map(mode => (
-                        <button
-                          key={mode}
-                          onClick={() => setFilter(prev => ({ ...prev, parallel_mode: mode }))}
-                          className={`flex-1 px-2 py-1 text-xs rounded border ${
-                            filter.parallel_mode === mode
-                              ? 'bg-yellow-500 text-white'
-                              : 'bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          {mode === 'normal' ? '通常' : mode === 'parallel' ? 'パラレル' : '両方'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* 列数 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">表示列数</label>
-                    <select
-                      value={colsCount}
-                      onChange={(e) => setColsCount(Number(e.target.value))}
-                      className="w-full border rounded px-2 py-1 text-sm"
-                    >
-                      <option value={2}>2列</option>
-                      <option value={3}>3列</option>
-                      <option value={4}>4列</option>
-                      <option value={5}>5列</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* カード一覧 */}
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-2">
-                表示中のカード: {filteredCards.length} 枚
-              </p>
-            </div>
-            
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-              </div>
-            ) : (
-              <CardGrid
-                cards={filteredCards}
-                colsCount={colsCount}
-                onCardClick={handleAddCard}
-                showAddButton={true}
-                getCardCount={(cardId) => deck.cards[cardId] || 0}
-                canAddCard={canAddCard}
+            {/* フィルタサイドバー（モバイル用オーバーレイ） */}
+            {filterSidebarOpen && (
+              <div
+                className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+                onClick={() => setFilterSidebarOpen(false)}
               />
             )}
+            
+            {/* フィルタサイドバー */}
+            <aside
+              className={`
+                fixed lg:sticky top-0 left-0
+                w-80 h-screen overflow-y-auto
+                bg-white shadow-lg z-50
+                transform transition-transform duration-300
+                ${filterSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+              `}
+            >
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4 lg:hidden">
+                  <h2 className="font-bold text-lg">🔍 フィルタ</h2>
+                  <button
+                    onClick={() => setFilterSidebarOpen(false)}
+                    className="p-2 hover:bg-gray-100 rounded"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                {filterMeta && (
+                  <FilterPanel
+                    filter={filter}
+                    onChange={(newFilter) => setFilter({ ...newFilter, leader_colors: leaderCard.color })}
+                    meta={filterMeta}
+                    hideLeaderType={true}
+                  />
+                )}
+                
+                {/* 列数選択 */}
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    表示列数
+                  </label>
+                  <select
+                    value={colsCount}
+                    onChange={(e) => setColsCount(Number(e.target.value))}
+                    className="w-full border rounded px-3 py-2"
+                  >
+                    <option value={2}>2列</option>
+                    <option value={3}>3列</option>
+                    <option value={4}>4列</option>
+                    <option value={5}>5列</option>
+                    <option value={6}>6列</option>
+                    <option value={7}>7列</option>
+                    <option value={8}>8列</option>
+                  </select>
+                </div>
+              </div>
+            </aside>
+            
+            {/* メインコンテンツ */}
+            <div className="flex-1">
+              <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h2 className="text-lg font-bold">➕ カードを追加</h2>
+                  <p className="text-sm text-gray-600">
+                    リーダー: {leaderCard.name}（{leaderCard.color.join('/')}）
+                    - リーダーの色と同じカードのみが表示されます
+                  </p>
+                </div>
+                <button
+                  onClick={() => setView('preview')}
+                  className="btn btn-secondary"
+                >
+                  🔙 プレビューに戻る
+                </button>
+              </div>
+              
+              {/* カード一覧 */}
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-sm text-gray-600">
+                  表示中のカード: {filteredCards.length} 枚
+                </p>
+                <button
+                  onClick={() => setFilterSidebarOpen(true)}
+                  className="btn btn-secondary btn-sm lg:hidden"
+                >
+                  🔍 フィルタ
+                </button>
+              </div>
+              
+              {loading ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+                </div>
+              ) : (
+                <CardGrid
+                  cards={filteredCards}
+                  colsCount={colsCount}
+                  onCardClick={handleAddCard}
+                  onCardRemove={(card) => handleRemoveCard(card.card_id)}
+                  showAddButton={true}
+                  getCardCount={(cardId) => deck.cards[cardId] || 0}
+                  canAddCard={canAddCard}
+                />
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -10,6 +10,7 @@ interface FilterMeta {
   types: string[];
   costs: number[];
   counters: number[];
+  powers: number[];
   attributes: string[];
   blocks: string[];
   features: string[];
@@ -34,6 +35,7 @@ export default function SearchMode() {
           types: data.types || [],
           costs: data.costs || [],
           counters: data.counters || [],
+          powers: data.powers || [],
           attributes: data.attributes || [],
           blocks: data.blocks || [],
           features: data.features || [],
@@ -112,7 +114,7 @@ export default function SearchMode() {
           {/* 列数選択 */}
           <div className="mt-4 p-3 bg-gray-50 rounded-lg">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              1列あたりのカード数
+              表示列数
             </label>
             <select
               value={colsCount}
@@ -123,6 +125,9 @@ export default function SearchMode() {
               <option value={3}>3列</option>
               <option value={4}>4列</option>
               <option value={5}>5列</option>
+              <option value={6}>6列</option>
+              <option value={7}>7列</option>
+              <option value={8}>8列</option>
             </select>
           </div>
         </div>

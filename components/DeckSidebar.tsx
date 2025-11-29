@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Card, Deck, UNLIMITED_CARDS } from '@/lib/types';
+import { generateDeckImage } from '@/lib/imageGenerator';
+import QRCode from 'qrcode';
 
 interface DeckSidebarProps {
   deck: Deck;
@@ -35,6 +37,7 @@ export default function DeckSidebar({
   const [exportText, setExportText] = useState('');
   const [showExport, setShowExport] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [generateProgress, setGenerateProgress] = useState('');
   
   const totalCards = Object.values(deck.cards).reduce((sum, count) => sum + count, 0);
   
@@ -103,11 +106,13 @@ export default function DeckSidebar({
     }
   };
   
-  // デッキ画像生成
+  // デッキ画像生成（クライアントサイド）
   const handleGenerateImage = async () => {
     if (!leaderCard) return;
     
     setGenerating(true);
+    setGenerateProgress('準備中...');
+    
     try {
       // エクスポートテキストを取得
       const exportRes = await fetch('/api/deck', {
@@ -121,6 +126,13 @@ export default function DeckSidebar({
       const exportData = await exportRes.json();
       const qrText = exportData.text || '';
       
+      // QRコードをData URLとして生成
+      const qrDataUrl = qrText ? await QRCode.toDataURL(qrText, {
+        width: 400,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      }) : '';
+      
       // カード画像URLリストを作成
       const cardUrls: string[] = [];
       deckCardInfos.forEach(info => {
@@ -129,27 +141,20 @@ export default function DeckSidebar({
         }
       });
       
-      // 画像生成
-      const res = await fetch('/api/image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leader_url: leaderCard.image_url,
-          card_urls: cardUrls.slice(0, 50),
-          deck_name: deck.name,
-          qr_text: qrText,
-          leader_colors: leaderCard.color,
-        }),
+      // クライアントサイドで画像生成
+      const blob = await generateDeckImage({
+        leaderUrl: leaderCard.image_url,
+        cardUrls: cardUrls.slice(0, 50),
+        deckName: deck.name,
+        qrDataUrl,
+        leaderColors: leaderCard.color,
+        onProgress: (progress, message) => {
+          setGenerateProgress(message);
+        },
       });
       
-      if (!res.ok) {
-        throw new Error('画像生成に失敗しました');
-      }
-      
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      
       // ダウンロード
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `${deck.name || 'deck'}_image.png`;
@@ -159,9 +164,10 @@ export default function DeckSidebar({
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Generate image error:', error);
-      alert('画像生成に失敗しました');
+      alert('画像生成に失敗しました: ' + (error instanceof Error ? error.message : '不明なエラー'));
     } finally {
       setGenerating(false);
+      setGenerateProgress('');
     }
   };
   
@@ -317,7 +323,7 @@ export default function DeckSidebar({
             disabled={generating || !leaderCard}
             className="w-full btn btn-success btn-sm"
           >
-            {generating ? '生成中...' : '🖼️ デッキ画像を生成'}
+            {generating ? generateProgress || '生成中...' : '🖼️ デッキ画像を生成'}
           </button>
         </div>
         

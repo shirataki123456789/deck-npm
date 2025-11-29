@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card, FilterOptions, DEFAULT_FILTER_OPTIONS, COLOR_ORDER } from '@/lib/types';
+import jsQR from 'jsqr';
 
 interface LeaderSelectProps {
   onSelect: (card: Card) => void;
@@ -43,27 +44,46 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
     fetchLeaders();
   }, [fetchLeaders]);
   
-  // QRコード読み取り
+  // QRコード読み取り（クライアントサイドで処理）
   const handleQrUpload = async (file: File) => {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      // Canvas APIを使って画像を読み込み
+      const img = new Image();
+      const url = URL.createObjectURL(file);
       
-      const res = await fetch('/api/qr', {
-        method: 'POST',
-        body: formData,
-      });
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          alert('Canvasの初期化に失敗しました');
+          URL.revokeObjectURL(url);
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // jsQRでデコード
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        
+        URL.revokeObjectURL(url);
+        
+        if (code) {
+          onImport(code.data);
+        } else {
+          alert('QRコードが検出されませんでした');
+        }
+      };
       
-      if (!res.ok) {
-        const error = await res.json();
-        alert(error.error || 'QRコードの読み取りに失敗しました');
-        return;
-      }
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        alert('画像の読み込みに失敗しました');
+      };
       
-      const data = await res.json();
-      if (data.text) {
-        onImport(data.text);
-      }
+      img.src = url;
     } catch (error) {
       console.error('QR decode error:', error);
       alert('QRコードの読み取りに失敗しました');
@@ -161,7 +181,7 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
           {leaders.map((leader) => (
             <div
               key={leader.card_id}
