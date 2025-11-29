@@ -41,7 +41,7 @@ export default function DeckMode() {
   const [filteredCards, setFilteredCards] = useState<Card[]>([]);
   const [filter, setFilter] = useState<FilterOptions>({
     ...DEFAULT_FILTER_OPTIONS,
-    types: ['CHARACTER', 'EVENT', 'STAGE'], // リーダー以外
+    types: [], // 未選択で全表示（リーダーはleader_colorsで除外される）
   });
   const [filterMeta, setFilterMeta] = useState<FilterMeta | null>(null);
   const [loading, setLoading] = useState(false);
