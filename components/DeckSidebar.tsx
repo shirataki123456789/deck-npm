@@ -181,7 +181,7 @@ export default function DeckSidebar({
         ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
       `}
     >
-      <div className="p-4">
+      <div className="p-4 pb-24 sm:pb-4">
         {/* モバイル用閉じるボタン */}
         <div className="flex items-center justify-between mb-4 lg:hidden">
           <h2 className="font-bold text-lg">🧾 現在のデッキ</h2>

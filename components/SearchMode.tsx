@@ -22,7 +22,7 @@ export default function SearchMode() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterOptions>(DEFAULT_FILTER_OPTIONS);
   const [filterMeta, setFilterMeta] = useState<FilterMeta | null>(null);
-  const [colsCount, setColsCount] = useState(3);
+  const [colsCount, setColsCount] = useState(4);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // フィルタメタデータを取得
@@ -111,7 +111,7 @@ export default function SearchMode() {
             />
           )}
           
-          {/* 列数選択 */}
+          {/* 表示設定 */}
           <div className="mt-4 p-3 bg-gray-50 rounded-lg">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               表示列数
@@ -121,14 +121,16 @@ export default function SearchMode() {
               onChange={(e) => setColsCount(Number(e.target.value))}
               className="w-full border rounded px-3 py-2"
             >
-              <option value={2}>2列</option>
               <option value={3}>3列</option>
               <option value={4}>4列</option>
-              <option value={5}>5列</option>
-              <option value={6}>6列</option>
-              <option value={7}>7列</option>
-              <option value={8}>8列</option>
+              <option value={5}>5列（コンパクト）</option>
+              <option value={6}>6列（コンパクト）</option>
+              <option value={7}>7列（コンパクト）</option>
+              <option value={8}>8列（コンパクト）</option>
             </select>
+            <p className="text-xs text-gray-500 mt-1">
+              5列以上は画像のみ表示
+            </p>
           </div>
         </div>
       </aside>

@@ -14,27 +14,24 @@ interface CardGridProps {
 
 export default function CardGrid({
   cards,
-  colsCount = 3,
+  colsCount = 4,
   onCardClick,
   onCardRemove,
   showAddButton = false,
   getCardCount,
   canAddCard,
 }: CardGridProps) {
-  // レスポンシブ対応の列数クラス
-  // モバイルは2列、その後は指定列数まで段階的に増加
-  const gridClass = {
-    2: 'grid-cols-2',
-    3: 'grid-cols-2 sm:grid-cols-3',
-    4: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
-    5: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
-    6: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6',
-    7: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7',
-    8: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8',
-  }[colsCount] || 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
+  // 指定列数に応じたグリッドクラス
+  // 画面幅に関係なく指定列数で表示（カードは自動縮小）
+  const gridClass = `grid-cols-${Math.min(colsCount, 12)}`;
   
   return (
-    <div className={`grid ${gridClass} gap-2 sm:gap-3`}>
+    <div 
+      className="grid gap-1 sm:gap-2"
+      style={{ 
+        gridTemplateColumns: `repeat(${colsCount}, minmax(0, 1fr))` 
+      }}
+    >
       {cards.map((card, idx) => (
         <CardItem
           key={`${card.card_id}-${idx}`}
@@ -44,6 +41,7 @@ export default function CardGrid({
           showAddButton={showAddButton}
           count={getCardCount?.(card.card_id)}
           canAdd={canAddCard?.(card.card_id)}
+          colsCount={colsCount}
         />
       ))}
     </div>
@@ -57,6 +55,7 @@ interface CardItemProps {
   showAddButton?: boolean;
   count?: number;
   canAdd?: boolean;
+  colsCount: number;
 }
 
 function CardItem({
@@ -66,85 +65,125 @@ function CardItem({
   showAddButton = false,
   count,
   canAdd = true,
+  colsCount,
 }: CardItemProps) {
   const isUnlimited = UNLIMITED_CARDS.includes(card.card_id);
   const maxCount = isUnlimited ? '∞' : '4';
   
+  // 列数が多い場合はコンパクト表示
+  const isCompact = colsCount >= 5;
+  
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    <div className="bg-white rounded shadow overflow-hidden">
       {/* カード画像 */}
-      <div className="relative">
+      <div 
+        className="relative cursor-pointer active:opacity-80"
+        onClick={() => onAdd?.(card)}
+      >
         <img
           src={card.image_url}
           alt={card.name}
           className="w-full aspect-[400/560] object-cover"
           loading="lazy"
+          decoding="async"
         />
         
         {/* パラレルマーク */}
         {card.is_parallel && (
-          <div className="absolute top-1 left-1 bg-yellow-400 text-black text-xs px-1.5 py-0.5 rounded font-bold">
-            ✨P
+          <div className={`absolute top-0.5 left-0.5 bg-yellow-400 text-black font-bold rounded ${
+            isCompact ? 'text-[8px] px-0.5' : 'text-xs px-1 py-0.5'
+          }`}>
+            {isCompact ? 'P' : '✨P'}
           </div>
         )}
         
         {/* カード枚数（デッキモード時） */}
         {showAddButton && typeof count === 'number' && (
-          <div className={`absolute top-1 right-1 text-white text-sm px-2 py-0.5 rounded-full font-bold ${
+          <div className={`absolute top-0.5 right-0.5 text-white rounded-full font-bold ${
             count > 0 ? 'bg-blue-600' : 'bg-gray-400'
-          }`}>
-            {count}/{maxCount}
+          } ${isCompact ? 'text-[10px] px-1' : 'text-sm px-2 py-0.5'}`}>
+            {isCompact ? count : `${count}/${maxCount}`}
           </div>
         )}
       </div>
       
-      {/* カード情報 */}
-      <div className="p-2">
-        <div className="text-sm font-medium truncate" title={card.name}>
-          {card.name}
-        </div>
-        <div className="text-xs text-gray-500 flex items-center gap-2">
-          <span>{card.card_id}</span>
-          {card.cost > 0 && <span>コスト:{card.cost}</span>}
-        </div>
-        
-        {/* 色バッジ */}
-        <div className="flex gap-1 mt-1">
-          {card.color.map(c => (
-            <span key={c} className={`color-badge color-badge-${c}`}>
-              {c}
-            </span>
-          ))}
-        </div>
-        
-        {/* ±ボタン（デッキモード時） */}
-        {showAddButton && (
-          <div className="flex gap-1 mt-2">
-            <button
-              onClick={() => onAdd?.(card)}
-              disabled={!canAdd}
-              className={`flex-1 py-1.5 rounded text-sm font-bold transition-colors ${
-                canAdd
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              ＋
-            </button>
-            <button
-              onClick={() => onRemove?.(card)}
-              disabled={!count || count <= 0}
-              className={`flex-1 py-1.5 rounded text-sm font-bold transition-colors ${
-                count && count > 0
-                  ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              −
-            </button>
+      {/* カード情報（コンパクト時は非表示） */}
+      {!isCompact && (
+        <div className="p-1.5 sm:p-2">
+          <div className="text-xs sm:text-sm font-medium truncate" title={card.name}>
+            {card.name}
           </div>
-        )}
-      </div>
+          <div className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 sm:gap-2">
+            <span>{card.card_id}</span>
+            {card.cost > 0 && <span>コスト:{card.cost}</span>}
+          </div>
+          
+          {/* 色バッジ */}
+          <div className="flex gap-0.5 sm:gap-1 mt-1">
+            {card.color.map(c => (
+              <span key={c} className={`color-badge color-badge-${c} text-[10px] sm:text-xs px-1 sm:px-2`}>
+                {c}
+              </span>
+            ))}
+          </div>
+          
+          {/* ±ボタン（デッキモード時） */}
+          {showAddButton && (
+            <div className="flex gap-1 mt-1.5 sm:mt-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onAdd?.(card); }}
+                disabled={!canAdd}
+                className={`flex-1 py-1 sm:py-1.5 rounded text-xs sm:text-sm font-bold transition-colors ${
+                  canAdd
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                ＋
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRemove?.(card); }}
+                disabled={!count || count <= 0}
+                className={`flex-1 py-1 sm:py-1.5 rounded text-xs sm:text-sm font-bold transition-colors ${
+                  count && count > 0
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                −
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* コンパクト時の±ボタン（画像下に小さく） */}
+      {isCompact && showAddButton && (
+        <div className="flex">
+          <button
+            onClick={(e) => { e.stopPropagation(); onAdd?.(card); }}
+            disabled={!canAdd}
+            className={`flex-1 py-0.5 text-[10px] font-bold ${
+              canAdd
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-300 text-gray-500'
+            }`}
+          >
+            ＋
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove?.(card); }}
+            disabled={!count || count <= 0}
+            className={`flex-1 py-0.5 text-[10px] font-bold ${
+              count && count > 0
+                ? 'bg-red-600 text-white'
+                : 'bg-gray-300 text-gray-500'
+            }`}
+          >
+            −
+          </button>
+        </div>
+      )}
     </div>
   );
 }
