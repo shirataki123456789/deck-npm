@@ -172,6 +172,15 @@ export default function DeckMode() {
     });
   };
   
+  // カード枚数を0にリセット
+  const handleResetCard = (cardId: string) => {
+    setDeck(prev => {
+      const newCards = { ...prev.cards };
+      delete newCards[cardId];
+      return { ...prev, cards: newCards };
+    });
+  };
+  
   // カード追加可能かチェック
   const canAddCard = (cardId: string): boolean => {
     const currentCount = deck.cards[cardId] || 0;
@@ -290,7 +299,7 @@ export default function DeckMode() {
         {view === 'add_cards' && leaderCard && (
           <div className="flex gap-4">
             {/* モバイル用フィルタボタン */}
-            <div className="lg:hidden fixed bottom-4 right-4 z-30">
+            <div className="lg:hidden fixed bottom-20 right-4 z-30">
               <button
                 onClick={() => setFilterSidebarOpen(true)}
                 className="btn btn-primary shadow-lg rounded-full w-14 h-14 flex items-center justify-center"
@@ -316,8 +325,9 @@ export default function DeckMode() {
                 transform transition-transform duration-300
                 ${filterSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
               `}
+              style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             >
-              <div className="p-4">
+              <div className="p-4 pb-32 lg:pb-4">
                 <div className="flex items-center justify-between mb-4 lg:hidden">
                   <h2 className="font-bold text-lg">🔍 フィルタ</h2>
                   <button
@@ -402,6 +412,7 @@ export default function DeckMode() {
                   colsCount={colsCount}
                   onCardClick={handleAddCard}
                   onCardRemove={(card) => handleRemoveCard(card.card_id)}
+                  onCardReset={(card) => handleResetCard(card.card_id)}
                   showAddButton={true}
                   getCardCount={(cardId) => deck.cards[cardId] || 0}
                   canAddCard={canAddCard}

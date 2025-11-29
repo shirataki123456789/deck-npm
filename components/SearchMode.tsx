@@ -91,8 +91,9 @@ export default function SearchMode() {
           transform transition-transform duration-300
           ${sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
         `}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        <div className="p-4">
+        <div className="p-4 pb-32 lg:pb-4">
           <div className="flex items-center justify-between mb-4 lg:hidden">
             <h2 className="font-bold text-lg">フィルタ</h2>
             <button

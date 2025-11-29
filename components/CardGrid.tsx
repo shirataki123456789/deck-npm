@@ -7,6 +7,7 @@ interface CardGridProps {
   colsCount?: number;
   onCardClick?: (card: Card) => void;
   onCardRemove?: (card: Card) => void;
+  onCardReset?: (card: Card) => void; // 枚数を0にリセット
   showAddButton?: boolean;
   getCardCount?: (cardId: string) => number;
   canAddCard?: (cardId: string) => boolean;
@@ -17,6 +18,7 @@ export default function CardGrid({
   colsCount = 4,
   onCardClick,
   onCardRemove,
+  onCardReset,
   showAddButton = false,
   getCardCount,
   canAddCard,
@@ -38,6 +40,7 @@ export default function CardGrid({
           card={card}
           onAdd={onCardClick}
           onRemove={onCardRemove}
+          onReset={onCardReset}
           showAddButton={showAddButton}
           count={getCardCount?.(card.card_id)}
           canAdd={canAddCard?.(card.card_id)}
@@ -52,6 +55,7 @@ interface CardItemProps {
   card: Card;
   onAdd?: (card: Card) => void;
   onRemove?: (card: Card) => void;
+  onReset?: (card: Card) => void;
   showAddButton?: boolean;
   count?: number;
   canAdd?: boolean;
@@ -62,23 +66,40 @@ function CardItem({
   card,
   onAdd,
   onRemove,
+  onReset,
   showAddButton = false,
   count,
   canAdd = true,
   colsCount,
 }: CardItemProps) {
   const isUnlimited = UNLIMITED_CARDS.includes(card.card_id);
-  const maxCount = isUnlimited ? '∞' : '4';
+  const maxCount = isUnlimited ? 99 : 4; // 無制限カードは99として扱う
+  const maxCountDisplay = isUnlimited ? '∞' : '4';
   
   // 列数が多い場合はコンパクト表示
   const isCompact = colsCount >= 5;
+  
+  // 画像クリック時の処理
+  const handleImageClick = () => {
+    if (!showAddButton) return;
+    
+    const currentCount = count || 0;
+    
+    // 最大枚数に達している場合は0にリセット
+    if (!isUnlimited && currentCount >= maxCount) {
+      onReset?.(card);
+    } else {
+      // それ以外は追加
+      onAdd?.(card);
+    }
+  };
   
   return (
     <div className="bg-white rounded shadow overflow-hidden">
       {/* カード画像 */}
       <div 
         className="relative cursor-pointer active:opacity-80"
-        onClick={() => onAdd?.(card)}
+        onClick={handleImageClick}
       >
         <img
           src={card.image_url}
@@ -100,9 +121,9 @@ function CardItem({
         {/* カード枚数（デッキモード時） */}
         {showAddButton && typeof count === 'number' && (
           <div className={`absolute top-0.5 right-0.5 text-white rounded-full font-bold ${
-            count > 0 ? 'bg-blue-600' : 'bg-gray-400'
+            count > 0 ? (count >= maxCount && !isUnlimited ? 'bg-orange-500' : 'bg-blue-600') : 'bg-gray-400'
           } ${isCompact ? 'text-[10px] px-1' : 'text-sm px-2 py-0.5'}`}>
-            {isCompact ? count : `${count}/${maxCount}`}
+            {isCompact ? count : `${count}/${maxCountDisplay}`}
           </div>
         )}
       </div>
