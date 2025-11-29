@@ -1,0 +1,122 @@
+'use client';
+
+import { Card } from '@/lib/types';
+
+interface CardGridProps {
+  cards: Card[];
+  colsCount?: number;
+  onCardClick?: (card: Card) => void;
+  showAddButton?: boolean;
+  getCardCount?: (cardId: string) => number;
+  canAddCard?: (cardId: string) => boolean;
+}
+
+export default function CardGrid({
+  cards,
+  colsCount = 3,
+  onCardClick,
+  showAddButton = false,
+  getCardCount,
+  canAddCard,
+}: CardGridProps) {
+  const gridClass = {
+    2: 'grid-cols-2',
+    3: 'grid-cols-3',
+    4: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4',
+    5: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+  }[colsCount] || 'grid-cols-3';
+  
+  return (
+    <div className={`grid ${gridClass} gap-2`}>
+      {cards.map((card, idx) => (
+        <CardItem
+          key={`${card.card_id}-${idx}`}
+          card={card}
+          onClick={onCardClick}
+          showAddButton={showAddButton}
+          count={getCardCount?.(card.card_id)}
+          canAdd={canAddCard?.(card.card_id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface CardItemProps {
+  card: Card;
+  onClick?: (card: Card) => void;
+  showAddButton?: boolean;
+  count?: number;
+  canAdd?: boolean;
+}
+
+function CardItem({
+  card,
+  onClick,
+  showAddButton = false,
+  count,
+  canAdd = true,
+}: CardItemProps) {
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* カード画像 */}
+      <div className="relative">
+        <img
+          src={card.image_url}
+          alt={card.name}
+          className="w-full aspect-[400/560] object-cover"
+          loading="lazy"
+        />
+        
+        {/* パラレルマーク */}
+        {card.is_parallel && (
+          <div className="absolute top-1 left-1 bg-yellow-400 text-black text-xs px-1.5 py-0.5 rounded font-bold">
+            ✨P
+          </div>
+        )}
+        
+        {/* カード枚数（デッキモード時） */}
+        {typeof count === 'number' && count > 0 && (
+          <div className="absolute top-1 right-1 bg-blue-600 text-white text-sm px-2 py-0.5 rounded-full font-bold">
+            {count}/4
+          </div>
+        )}
+      </div>
+      
+      {/* カード情報 */}
+      <div className="p-2">
+        <div className="text-sm font-medium truncate" title={card.name}>
+          {card.name}
+        </div>
+        <div className="text-xs text-gray-500 flex items-center gap-2">
+          <span>{card.card_id}</span>
+          {card.cost > 0 && <span>コスト:{card.cost}</span>}
+        </div>
+        
+        {/* 色バッジ */}
+        <div className="flex gap-1 mt-1">
+          {card.color.map(c => (
+            <span key={c} className={`color-badge color-badge-${c}`}>
+              {c}
+            </span>
+          ))}
+        </div>
+        
+        {/* 追加ボタン */}
+        {showAddButton && onClick && (
+          <button
+            onClick={() => onClick(card)}
+            disabled={!canAdd}
+            className={`w-full mt-2 py-1.5 rounded text-sm font-medium transition-colors ${
+              canAdd
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            ＋ 追加
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

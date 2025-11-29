@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* カスタムスタイル */
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded font-medium transition-colors duration-200;
+  }
+  
+  .btn-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+  }
+  
+  .btn-success {
+    @apply bg-green-600 text-white hover:bg-green-700;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700;
+  }
+  
+  .btn-sm {
+    @apply px-2 py-1 text-sm;
+  }
+  
+  .card-grid {
+    @apply grid gap-2;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  @media (min-width: 640px) {
+    .card-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .card-grid {
+      grid-template-columns: repeat(5, 1fr);
+    }
+  }
+}
+
+/* カード色のバッジ */
+.color-badge {
+  @apply inline-block px-2 py-0.5 rounded text-xs font-medium;
+}
+
+.color-badge-赤 { @apply bg-red-600 text-white; }
+.color-badge-緑 { @apply bg-green-600 text-white; }
+.color-badge-青 { @apply bg-blue-600 text-white; }
+.color-badge-紫 { @apply bg-purple-600 text-white; }
+.color-badge-黒 { @apply bg-gray-800 text-white; }
+.color-badge-黄 { @apply bg-yellow-400 text-black; }
+
+/* モバイル用のスタイル調整 */
+@media (max-width: 768px) {
+  .sidebar {
+    @apply fixed inset-y-0 right-0 w-80 transform translate-x-full transition-transform z-50;
+  }
+  
+  .sidebar.open {
+    @apply translate-x-0;
+  }
+  
+  .sidebar-overlay {
+    @apply fixed inset-0 bg-black bg-opacity-50 z-40;
+  }
+}
