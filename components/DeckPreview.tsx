@@ -318,22 +318,44 @@ export default function DeckPreview({
             {deckCards.map(({ card, count }, idx) => {
               const isUnlimited = UNLIMITED_CARDS.includes(card.card_id);
               const isCompact = colsCount >= 5;
+              const isBlankCard = !card.image_url;
               return (
                 <div key={`${card.card_id}-${idx}`} className="relative">
-                  <img
-                    src={card.image_url}
-                    alt={card.name}
-                    className="w-full rounded"
-                    loading="lazy"
-                  />
+                  {/* カード画像またはプレースホルダー */}
+                  {card.image_url ? (
+                    <img
+                      src={card.image_url}
+                      alt={card.name}
+                      className="w-full rounded"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 rounded flex flex-col items-center justify-center text-gray-600">
+                      <span className={isCompact ? 'text-xl' : 'text-3xl'}>?</span>
+                      {!isCompact && (
+                        <>
+                          <span className="text-[10px] mt-1 px-1 text-center truncate w-full">{card.name}</span>
+                          <span className="text-[8px]">{card.card_id}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                   {/* 枚数バッジ */}
                   <div className={`absolute top-0.5 right-0.5 bg-blue-600 text-white rounded-full font-bold ${
                     isCompact ? 'text-[10px] px-1' : 'text-xs px-1.5 py-0.5'
                   }`}>
                     ×{count}
                   </div>
+                  {/* ブランクカードマーク */}
+                  {isBlankCard && (
+                    <div className={`absolute bg-purple-600 text-white font-bold rounded ${
+                      isCompact ? 'top-0.5 left-0.5 text-[8px] px-0.5' : 'top-1 left-1 text-xs px-1 py-0.5'
+                    }`}>
+                      {isCompact ? 'B' : '📝仮'}
+                    </div>
+                  )}
                   {/* パラレルマーク */}
-                  {card.is_parallel && (
+                  {card.is_parallel && !isBlankCard && (
                     <div className={`absolute top-0.5 left-0.5 bg-yellow-400 text-black font-bold rounded ${
                       isCompact ? 'text-[8px] px-0.5' : 'text-xs px-1 py-0.5'
                     }`}>
