@@ -1,4 +1,4 @@
-import { COLOR_HEX } from './types';
+import { COLOR_HEX, Card } from './types';
 
 // 定数
 const FINAL_WIDTH = 2150;
@@ -98,9 +98,89 @@ function drawDeckName(
   ctx.fillText(deckName, deckNameAreaStart + deckNameAreaWidth / 2, textY, deckNameAreaWidth - 40);
 }
 
+/**
+ * ブランクカードのプレースホルダーを描画
+ */
+function drawBlankCardPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  card: Card,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) {
+  // 背景グラデーション（カードの色に基づく）
+  const cardColors = card.color.map(c => COLOR_HEX[c] || '#888888');
+  if (cardColors.length === 0) cardColors.push('#888888');
+  
+  const gradient = ctx.createLinearGradient(x, y, x + width, y + height);
+  if (cardColors.length === 1) {
+    gradient.addColorStop(0, cardColors[0]);
+    gradient.addColorStop(1, cardColors[0]);
+  } else {
+    cardColors.forEach((color, i) => {
+      gradient.addColorStop(i / (cardColors.length - 1), color);
+    });
+  }
+  
+  // 背景
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x, y, width, height);
+  
+  // 枠線
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 2, y + 2, width - 4, height - 4);
+  
+  // 半透明オーバーレイ
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(x, y, width, height);
+  
+  ctx.fillStyle = 'white';
+  ctx.textAlign = 'center';
+  
+  // カード名（上部）
+  ctx.font = 'bold 14px sans-serif';
+  const name = card.name.length > 10 ? card.name.slice(0, 10) + '...' : card.name;
+  ctx.fillText(name, x + width / 2, y + 25, width - 10);
+  
+  // コスト（大きく中央）
+  ctx.font = 'bold 48px sans-serif';
+  ctx.fillText(String(card.cost >= 0 ? card.cost : '-'), x + width / 2, y + height / 2 - 20);
+  
+  // パワー
+  if (card.power > 0) {
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(`${card.power}`, x + width / 2, y + height / 2 + 20);
+  }
+  
+  // カウンター（下部）
+  ctx.font = '12px sans-serif';
+  const counterText = card.counter > 0 ? `+${card.counter}` : 'カウンターなし';
+  ctx.fillText(counterText, x + width / 2, y + height - 40);
+  
+  // カードID（最下部）
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.fillText(card.card_id, x + width / 2, y + height - 15);
+  
+  // 「仮」マーク
+  ctx.fillStyle = 'rgba(128, 0, 255, 0.8)';
+  ctx.fillRect(x + 5, y + 5, 30, 18);
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText('仮', x + 20, y + 17);
+}
+
+export interface DeckImageCard {
+  url: string;
+  card?: Card; // ブランクカード用の情報
+}
+
 export interface DeckImageOptions {
   leaderUrl: string;
-  cardUrls: string[];
+  cardUrls: string[];  // 後方互換性のため残す
+  cards?: DeckImageCard[];  // 新しい形式（カード情報付き）
   deckName: string;
   qrDataUrl: string;
   leaderColors: string[];
@@ -114,6 +194,7 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
   const {
     leaderUrl,
     cardUrls,
+    cards,
     deckName,
     qrDataUrl,
     leaderColors,
@@ -185,24 +266,35 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
   const gridStartY = UPPER_HEIGHT;
   const gridStartX = Math.floor((FINAL_WIDTH - (CARD_WIDTH * CARDS_PER_ROW)) / 2);
   
-  // カード画像を並列でダウンロード（最大50枚）
-  const cardUrlsToLoad = cardUrls.slice(0, CARDS_PER_ROW * CARDS_PER_COL);
-  const totalCards = cardUrlsToLoad.length;
+  // 新しい形式（cards）があればそれを使う、なければ従来のcardUrls
+  const cardsToRender: DeckImageCard[] = cards 
+    ? cards.slice(0, CARDS_PER_ROW * CARDS_PER_COL)
+    : cardUrls.slice(0, CARDS_PER_ROW * CARDS_PER_COL).map(url => ({ url }));
   
-  for (let idx = 0; idx < cardUrlsToLoad.length; idx++) {
-    const url = cardUrlsToLoad[idx];
+  const totalCards = cardsToRender.length;
+  
+  for (let idx = 0; idx < cardsToRender.length; idx++) {
+    const cardData = cardsToRender[idx];
     onProgress?.(30 + Math.floor((idx / totalCards) * 60), `カード ${idx + 1}/${totalCards} を読み込み中...`);
-    
-    const cardImg = await loadImageWithProxy(url);
-    if (!cardImg) continue;
     
     const row = Math.floor(idx / CARDS_PER_ROW);
     const col = idx % CARDS_PER_ROW;
-    
     const x = gridStartX + col * CARD_WIDTH;
     const y = gridStartY + row * CARD_HEIGHT;
     
-    ctx.drawImage(cardImg, x, y, CARD_WIDTH, CARD_HEIGHT);
+    // ブランクカード（URLが空でカード情報がある場合）
+    if (!cardData.url && cardData.card) {
+      drawBlankCardPlaceholder(ctx, cardData.card, x, y, CARD_WIDTH, CARD_HEIGHT);
+      continue;
+    }
+    
+    // 通常のカード画像
+    if (cardData.url) {
+      const cardImg = await loadImageWithProxy(cardData.url);
+      if (cardImg) {
+        ctx.drawImage(cardImg, x, y, CARD_WIDTH, CARD_HEIGHT);
+      }
+    }
   }
   
   onProgress?.(95, '画像を生成中...');
