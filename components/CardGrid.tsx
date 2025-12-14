@@ -109,28 +109,52 @@ function CardItem({
         className="relative cursor-pointer active:opacity-80"
         onClick={handleImageClick}
       >
-        <img
-          src={card.image_url}
-          alt={card.name}
-          className="w-full aspect-[400/560] object-cover"
-          loading="lazy"
-          decoding="async"
-        />
+        {/* カード画像またはプレースホルダー */}
+        {card.image_url ? (
+          <img
+            src={card.image_url}
+            alt={card.name}
+            className="w-full aspect-[400/560] object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div className="w-full aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 flex flex-col items-center justify-center text-gray-600">
+            <span className={isCompact ? 'text-2xl' : 'text-4xl'}>?</span>
+            {!isCompact && (
+              <>
+                <span className="text-xs mt-1 px-2 text-center truncate w-full">{card.name}</span>
+                <span className="text-[10px] mt-0.5">{card.card_id}</span>
+              </>
+            )}
+          </div>
+        )}
         
-        {/* 拡大ボタン */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onZoom?.(); }}
-          className={`absolute bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition-opacity ${
-            isCompact 
-              ? 'bottom-0.5 left-0.5 w-5 h-5 text-[10px]' 
-              : 'bottom-1 left-1 w-7 h-7 text-sm'
-          } flex items-center justify-center`}
-        >
-          🔍
-        </button>
+        {/* ブランクカードマーク */}
+        {!card.image_url && (
+          <div className={`absolute bg-purple-600 text-white font-bold rounded ${
+            isCompact ? 'top-0.5 left-0.5 text-[8px] px-0.5' : 'top-1 left-1 text-xs px-1 py-0.5'
+          }`}>
+            {isCompact ? 'B' : '📝仮'}
+          </div>
+        )}
+        
+        {/* 拡大ボタン（画像がある場合のみ） */}
+        {card.image_url && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onZoom?.(); }}
+            className={`absolute bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition-opacity ${
+              isCompact 
+                ? 'bottom-0.5 left-0.5 w-5 h-5 text-[10px]' 
+                : 'bottom-1 left-1 w-7 h-7 text-sm'
+            } flex items-center justify-center`}
+          >
+            🔍
+          </button>
+        )}
         
         {/* パラレルマーク */}
-        {card.is_parallel && (
+        {card.is_parallel && card.image_url && (
           <div className={`absolute top-0.5 left-0.5 bg-yellow-400 text-black font-bold rounded ${
             isCompact ? 'text-[8px] px-0.5' : 'text-xs px-1 py-0.5'
           }`}>
