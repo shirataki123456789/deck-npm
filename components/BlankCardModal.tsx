@@ -10,46 +10,57 @@ interface BlankCardModalProps {
   existingIds: string[]; // 既存カードIDのリスト（重複チェック用）
 }
 
+// ブランクカード用の一意IDを生成
+let blankCardCounter = 0;
+const generateBlankId = () => {
+  blankCardCounter++;
+  return `BLANK-${String(blankCardCounter).padStart(3, '0')}`;
+};
+
 export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: BlankCardModalProps) {
   const [cardId, setCardId] = useState('');
   const [cardName, setCardName] = useState('');
   const [cardType, setCardType] = useState<string>('CHARACTER');
   const [selectedColors, setSelectedColors] = useState<string[]>(['赤']);
   const [cost, setCost] = useState<number>(0);
-  const [power, setPower] = useState<number>(0);
-  const [counter, setCounter] = useState<number>(0);
+  const [power, setPower] = useState<number>(5000);
+  const [counter, setCounter] = useState<number>(1000);
   const [error, setError] = useState<string>('');
   
   if (!isOpen) return null;
   
   const handleSubmit = () => {
-    // バリデーション
-    if (!cardId.trim()) {
-      setError('カードIDを入力してください');
-      return;
-    }
-    
-    // ID形式チェック（例: OP10-001, ST01-001, EB01-001）
-    if (!/^[A-Z]{2,3}\d{2}-\d{3}$/i.test(cardId.trim())) {
-      setError('カードIDの形式が正しくありません（例: OP10-001）');
-      return;
-    }
-    
-    // 重複チェック
-    if (existingIds.includes(cardId.trim().toUpperCase())) {
-      setError('このカードIDは既に存在します');
-      return;
-    }
-    
     if (selectedColors.length === 0) {
       setError('色を1つ以上選択してください');
       return;
     }
     
+    // IDが入力されている場合のみ形式チェック
+    let finalCardId = cardId.trim().toUpperCase();
+    if (finalCardId) {
+      // ID形式チェック（例: OP10-001, ST01-001, EB01-001）
+      if (!/^[A-Z]{2,3}\d{2}-\d{3}$/i.test(finalCardId)) {
+        setError('カードIDの形式が正しくありません（例: OP10-001）');
+        return;
+      }
+      
+      // 重複チェック
+      if (existingIds.includes(finalCardId)) {
+        setError('このカードIDは既に存在します');
+        return;
+      }
+    } else {
+      // IDが空の場合は自動生成
+      finalCardId = generateBlankId();
+    }
+    
+    // カード名が空の場合のデフォルト
+    const finalName = cardName.trim() || '不明カード';
+    
     // ブランクカードを作成
     const blankCard: Card = {
-      name: cardName.trim() || `不明カード (${cardId.trim().toUpperCase()})`,
-      card_id: cardId.trim().toUpperCase(),
+      name: finalName,
+      card_id: finalCardId,
       card_code: '',
       type: cardType,
       rarity: '?',
@@ -76,8 +87,8 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
     setCardType('CHARACTER');
     setSelectedColors(['赤']);
     setCost(0);
-    setPower(0);
-    setCounter(0);
+    setPower(5000);
+    setCounter(1000);
     setError('');
     onClose();
   };
@@ -90,6 +101,10 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
     );
   };
   
+  // プレビュー用のID表示
+  const previewId = cardId.trim().toUpperCase() || '(自動生成)';
+  const previewName = cardName.trim() || '不明カード';
+  
   return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4"
@@ -100,7 +115,7 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="text-lg font-bold">➕ ブランクカードを追加</h2>
+          <h2 className="text-lg font-bold">📝 ブランクカードを追加</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 text-xl"
@@ -116,27 +131,10 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
             </div>
           )}
           
-          {/* カードID */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              カードID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={cardId}
-              onChange={(e) => { setCardId(e.target.value); setError(''); }}
-              placeholder="例: OP10-001"
-              className="w-full border rounded px-3 py-2 text-sm"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              形式: OP10-001, ST01-001, EB01-001 など
-            </p>
-          </div>
-          
           {/* カード名 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              カード名（任意）
+              カード名
             </label>
             <input
               type="text"
@@ -145,6 +143,23 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
               placeholder="例: モンキー・D・ルフィ"
               className="w-full border rounded px-3 py-2 text-sm"
             />
+          </div>
+          
+          {/* カードID（任意） */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              カードID（任意）
+            </label>
+            <input
+              type="text"
+              value={cardId}
+              onChange={(e) => { setCardId(e.target.value); setError(''); }}
+              placeholder="例: OP10-001（空欄で自動生成）"
+              className="w-full border rounded px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              空欄の場合は自動でIDが生成されます
+            </p>
           </div>
           
           {/* タイプ */}
@@ -241,12 +256,13 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
             <p className="text-sm font-medium text-gray-700 mb-2">プレビュー</p>
             <div className="flex items-center gap-3">
               {/* プレースホルダー画像 */}
-              <div className="w-16 h-22 bg-gray-300 rounded flex items-center justify-center text-2xl text-gray-500">
-                ?
+              <div className="w-20 aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 rounded flex flex-col items-center justify-center text-gray-600 text-xs">
+                <span className="text-2xl mb-1">?</span>
+                <span className="px-1 text-center truncate w-full text-[10px]">{previewName}</span>
               </div>
               <div className="flex-1">
-                <p className="font-medium">{cardName || `不明カード (${cardId.toUpperCase() || '???'})`}</p>
-                <p className="text-sm text-gray-600">{cardId.toUpperCase() || '???'}</p>
+                <p className="font-medium">{previewName}</p>
+                <p className="text-sm text-gray-600">{previewId}</p>
                 <div className="flex gap-1 mt-1">
                   {selectedColors.map(c => (
                     <span key={c} className={`color-badge color-badge-${c} text-xs`}>
@@ -255,7 +271,7 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
                   ))}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {cardType} / コスト{cost} / パワー{power}
+                  {cardType} / コスト{cost} / パワー{power} / カウンター{counter > 0 ? `+${counter}` : 'なし'}
                 </p>
               </div>
             </div>

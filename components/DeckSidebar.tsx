@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Card, Deck, UNLIMITED_CARDS } from '@/lib/types';
-import { generateDeckImage } from '@/lib/imageGenerator';
+import { generateDeckImage, DeckImageCard } from '@/lib/imageGenerator';
 import QRCode from 'qrcode';
 
 interface DeckSidebarProps {
@@ -14,6 +14,7 @@ interface DeckSidebarProps {
   onRemoveCard: (cardId: string) => void;
   onAddCard: (card: Card) => void;
   onPreview: () => void;
+  allCards?: Card[]; // ブランクカード情報を含む全カードリスト
 }
 
 interface DeckCardInfo {
@@ -21,6 +22,7 @@ interface DeckCardInfo {
   name: string;
   count: number;
   image_url?: string;
+  card?: Card; // ブランクカード用
 }
 
 export default function DeckSidebar({
@@ -32,6 +34,7 @@ export default function DeckSidebar({
   onRemoveCard,
   onAddCard,
   onPreview,
+  allCards = [],
 }: DeckSidebarProps) {
   const [deckCardInfos, setDeckCardInfos] = useState<DeckCardInfo[]>([]);
   const [exportText, setExportText] = useState('');
@@ -51,40 +54,69 @@ export default function DeckSidebar({
       }
       
       try {
-        // カード情報を取得してソート
-        const res = await fetch('/api/deck', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'sort',
-            card_ids: cardIds,
-          }),
-        });
-        const data = await res.json();
+        // APIから取得できるカードIDとブランクカードIDを分離
+        const blankCardIds = cardIds.filter(id => id.startsWith('BLANK-'));
+        const normalCardIds = cardIds.filter(id => !id.startsWith('BLANK-'));
         
-        if (data.cards) {
-          const infos: DeckCardInfo[] = data.cards.map((c: any) => ({
-            card_id: c.card_id,
-            name: c.name,
-            count: deck.cards[c.card_id] || 0,
-            image_url: c.image_url,
-          }));
-          setDeckCardInfos(infos);
+        const infos: DeckCardInfo[] = [];
+        
+        // ブランクカードはallCardsから取得
+        blankCardIds.forEach(id => {
+          const card = allCards.find(c => c.card_id === id);
+          if (card) {
+            infos.push({
+              card_id: card.card_id,
+              name: card.name,
+              count: deck.cards[id] || 0,
+              image_url: card.image_url || '',
+              card: card, // ブランクカード情報を保持
+            });
+          }
+        });
+        
+        // 通常カードはAPIから取得
+        if (normalCardIds.length > 0) {
+          const res = await fetch('/api/deck', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'sort',
+              card_ids: normalCardIds,
+            }),
+          });
+          const data = await res.json();
+          
+          if (data.cards) {
+            data.cards.forEach((c: any) => {
+              infos.push({
+                card_id: c.card_id,
+                name: c.name,
+                count: deck.cards[c.card_id] || 0,
+                image_url: c.image_url,
+              });
+            });
+          }
         }
+        
+        setDeckCardInfos(infos);
       } catch (error) {
         console.error('Fetch card infos error:', error);
         // フォールバック：IDのみで表示
-        const infos = cardIds.map(id => ({
-          card_id: id,
-          name: id,
-          count: deck.cards[id] || 0,
-        }));
+        const infos = cardIds.map(id => {
+          const blankCard = allCards.find(c => c.card_id === id);
+          return {
+            card_id: id,
+            name: blankCard?.name || id,
+            count: deck.cards[id] || 0,
+            card: blankCard,
+          };
+        });
         setDeckCardInfos(infos);
       }
     };
     
     fetchCardInfos();
-  }, [deck.cards]);
+  }, [deck.cards, allCards]);
   
   // デッキエクスポート
   const handleExport = async () => {
@@ -114,13 +146,21 @@ export default function DeckSidebar({
     setGenerateProgress('準備中...');
     
     try {
-      // エクスポートテキストを取得
+      // エクスポートテキストを取得（ブランクカードは除外してQR生成）
+      const normalCardIds = Object.keys(deck.cards).filter(id => !id.startsWith('BLANK-'));
+      const normalDeck = {
+        ...deck,
+        cards: Object.fromEntries(
+          Object.entries(deck.cards).filter(([id]) => !id.startsWith('BLANK-'))
+        ),
+      };
+      
       const exportRes = await fetch('/api/deck', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'export',
-          deck: deck,
+          deck: normalDeck,
         }),
       });
       const exportData = await exportRes.json();
@@ -133,18 +173,30 @@ export default function DeckSidebar({
         color: { dark: '#000000', light: '#ffffff' },
       }) : '';
       
-      // カード画像URLリストを作成
-      const cardUrls: string[] = [];
+      // カード情報リストを作成（ブランクカード対応）
+      const cards: DeckImageCard[] = [];
       deckCardInfos.forEach(info => {
         for (let i = 0; i < info.count; i++) {
-          cardUrls.push(info.image_url || `https://www.onepiece-cardgame.com/images/cardlist/card/${info.card_id}.png`);
+          if (info.card && !info.image_url) {
+            // ブランクカード
+            cards.push({
+              url: '',
+              card: info.card,
+            });
+          } else {
+            // 通常カード
+            cards.push({
+              url: info.image_url || `https://www.onepiece-cardgame.com/images/cardlist/card/${info.card_id}.png`,
+            });
+          }
         }
       });
       
       // クライアントサイドで画像生成
       const blob = await generateDeckImage({
         leaderUrl: leaderCard.image_url,
-        cardUrls: cardUrls.slice(0, 50),
+        cardUrls: [], // 後方互換性のため空配列
+        cards: cards.slice(0, 50),
         deckName: deck.name,
         qrDataUrl,
         leaderColors: leaderCard.color,

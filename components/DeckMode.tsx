@@ -511,6 +511,7 @@ export default function DeckMode() {
           onRemoveCard={handleRemoveCard}
           onAddCard={handleAddCard}
           onPreview={() => setView('preview')}
+          allCards={[...allCards, ...blankCards]}
         />
       )}
       
