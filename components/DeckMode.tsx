@@ -7,6 +7,7 @@ import CardGrid from './CardGrid';
 import DeckSidebar from './DeckSidebar';
 import DeckPreview from './DeckPreview';
 import LeaderSelect from './LeaderSelect';
+import BlankCardModal from './BlankCardModal';
 
 type DeckView = 'leader' | 'preview' | 'add_cards';
 
@@ -38,6 +39,7 @@ export default function DeckMode() {
   
   // カード検索関連
   const [allCards, setAllCards] = useState<Card[]>([]); // 全カードのキャッシュ
+  const [blankCards, setBlankCards] = useState<Card[]>([]); // ブランクカード（セッション内のみ）
   const [filteredCards, setFilteredCards] = useState<Card[]>([]);
   const [filter, setFilter] = useState<FilterOptions>({
     ...DEFAULT_FILTER_OPTIONS,
@@ -46,6 +48,7 @@ export default function DeckMode() {
   const [filterMeta, setFilterMeta] = useState<FilterMeta | null>(null);
   const [loading, setLoading] = useState(false);
   const [colsCount, setColsCount] = useState(4);
+  const [showBlankCardModal, setShowBlankCardModal] = useState(false);
   
   // 初回に全カードを取得してキャッシュ
   useEffect(() => {
@@ -108,14 +111,46 @@ export default function DeckMode() {
         body: JSON.stringify(filterOptions),
       });
       const data = await res.json();
-      setFilteredCards(data.cards || []);
+      
+      // ブランクカードもフィルタして追加
+      const filteredBlankCards = blankCards.filter(card => {
+        // リーダー色フィルタ
+        if (filterOptions.leader_colors.length > 0) {
+          if (!card.color.some(c => filterOptions.leader_colors.includes(c))) {
+            return false;
+          }
+        }
+        // 色フィルタ
+        if (filterOptions.colors.length > 0) {
+          if (!card.color.some(c => filterOptions.colors.includes(c))) {
+            return false;
+          }
+        }
+        // タイプフィルタ
+        if (filterOptions.types.length > 0) {
+          if (!filterOptions.types.includes(card.type)) {
+            return false;
+          }
+        }
+        // フリーワードフィルタ
+        if (filterOptions.free_words.trim()) {
+          const searchText = `${card.name} ${card.card_id}`.toLowerCase();
+          const words = filterOptions.free_words.toLowerCase().split(/\s+/);
+          if (!words.every(w => searchText.includes(w))) {
+            return false;
+          }
+        }
+        return true;
+      });
+      
+      setFilteredCards([...filteredBlankCards, ...(data.cards || [])]);
     } catch (error) {
       console.error('Search error:', error);
-      setFilteredCards([]);
+      setFilteredCards(blankCards);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [blankCards]);
   
   // フィルタ変更時に検索（カード追加画面でのみ）
   useEffect(() => {
@@ -179,6 +214,15 @@ export default function DeckMode() {
       delete newCards[cardId];
       return { ...prev, cards: newCards };
     });
+  };
+  
+  // ブランクカードを追加
+  const handleAddBlankCard = (card: Card) => {
+    setBlankCards(prev => [...prev, card]);
+    // allCardsにも追加（DeckPreviewで表示するため）
+    setAllCards(prev => [...prev, card]);
+    // 検索を再実行してリストに表示
+    searchCards(filter);
   };
   
   // カード追加可能かチェック
@@ -382,6 +426,25 @@ export default function DeckMode() {
                     5列以上は画像のみ表示
                   </p>
                 </div>
+                
+                {/* ブランクカード追加 */}
+                <div className="mt-4">
+                  <button
+                    onClick={() => setShowBlankCardModal(true)}
+                    className="w-full btn btn-secondary flex items-center justify-center gap-2"
+                  >
+                    <span>📝</span>
+                    <span>カードを手動追加</span>
+                  </button>
+                  <p className="text-xs text-gray-500 mt-1">
+                    データ未登録のカードを仮追加できます
+                  </p>
+                  {blankCards.length > 0 && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      ブランクカード: {blankCards.length}枚追加済み
+                    </p>
+                  )}
+                </div>
               </div>
             </aside>
             
@@ -450,6 +513,14 @@ export default function DeckMode() {
           onPreview={() => setView('preview')}
         />
       )}
+      
+      {/* ブランクカード追加モーダル */}
+      <BlankCardModal
+        isOpen={showBlankCardModal}
+        onClose={() => setShowBlankCardModal(false)}
+        onAdd={handleAddBlankCard}
+        existingIds={[...allCards.map(c => c.card_id), ...blankCards.map(c => c.card_id)]}
+      />
     </div>
   );
 }
