@@ -194,7 +194,61 @@ export default function DeckSidebar({
     }
   };
   
-  // ブランクカード込みエクスポート（拡張形式）
+  // ブランクカードを圧縮形式でエンコード（QRコード用）
+  const encodeBlankCardsForQR = (cards: Card[], counts: Record<string, number>): string => {
+    // 短縮形式: B|id|name|type|colors|cost|power|counter|attr|count
+    // 例: B|BLANK-0001|ルフィ|C|赤|5|6000|1000|斬|4
+    return cards.map(c => {
+      const typeCode = c.type === 'CHARACTER' ? 'C' : c.type === 'EVENT' ? 'E' : 'S';
+      const colors = c.color.join(',');
+      const count = counts[c.card_id] || 1;
+      // 特徴と効果は長くなるので省略（別途インポート時に補完可能）
+      const features = c.features.slice(0, 2).join(','); // 最大2つ
+      const text = c.text ? c.text.slice(0, 30) : ''; // 最大30文字
+      return `B|${c.card_id}|${c.name}|${typeCode}|${colors}|${c.cost}|${c.power}|${c.counter}|${c.attribute || '-'}|${count}|${features}|${text}`;
+    }).join('\n');
+  };
+  
+  // 圧縮形式からブランクカードをデコード
+  const decodeBlankCardsFromQR = (encoded: string): { cards: Card[]; counts: Record<string, number> } => {
+    const cards: Card[] = [];
+    const counts: Record<string, number> = {};
+    
+    const lines = encoded.split('\n').filter(l => l.startsWith('B|'));
+    lines.forEach(line => {
+      const parts = line.split('|');
+      if (parts.length >= 10) {
+        const [, cardId, name, typeCode, colors, cost, power, counter, attr, count, features, text] = parts;
+        const type = typeCode === 'C' ? 'CHARACTER' : typeCode === 'E' ? 'EVENT' : 'STAGE';
+        
+        cards.push({
+          name: name || '不明カード',
+          card_id: cardId,
+          card_code: '',
+          type,
+          rarity: '?',
+          cost: parseInt(cost) || 0,
+          attribute: attr === '-' ? '' : attr,
+          power: parseInt(power) || 0,
+          counter: parseInt(counter) || 0,
+          color: colors ? colors.split(',') : [],
+          block_icon: '',
+          features: features ? features.split(',').filter(Boolean) : [],
+          text: text || '',
+          trigger: '',
+          source: 'ブランクカード（QRインポート）',
+          image_url: '',
+          is_parallel: false,
+          series_id: 'BLANK',
+        });
+        counts[cardId] = parseInt(count) || 1;
+      }
+    });
+    
+    return { cards, counts };
+  };
+  
+  // ブランクカード込みエクスポート（QR対応形式）
   const handleExportWithBlankCards = async () => {
     try {
       // 通常カードのエクスポート
@@ -216,16 +270,16 @@ export default function DeckSidebar({
       const data = await res.json();
       const normalText = data.text || '';
       
-      // ブランクカード部分
+      // ブランクカード部分（QR対応圧縮形式）
       const blankCardsInDeck = blankCards.filter(c => deck.cards[c.card_id]);
-      const blankCardsData = blankCardsInDeck.map(c => ({
-        ...c,
-        count: deck.cards[c.card_id],
-      }));
+      const blankCounts: Record<string, number> = {};
+      blankCardsInDeck.forEach(c => { blankCounts[c.card_id] = deck.cards[c.card_id]; });
       
-      // 拡張形式：通常テキスト + セパレータ + ブランクカードJSON
-      const extendedText = blankCardsData.length > 0
-        ? `${normalText}\n---BLANK_CARDS---\n${JSON.stringify(blankCardsData)}`
+      const blankEncoded = encodeBlankCardsForQR(blankCardsInDeck, blankCounts);
+      
+      // 拡張形式：通常テキスト + ブランクカード（QR形式）
+      const extendedText = blankEncoded
+        ? `${normalText}\n${blankEncoded}`
         : normalText;
       
       setExportText(extendedText);
@@ -236,8 +290,19 @@ export default function DeckSidebar({
     }
   };
   
-  // 拡張形式のインポート処理
+  // 拡張形式のインポート処理（QR形式対応）
   const parseExtendedDeckText = (text: string): { normalText: string; blankCards: Card[]; blankCounts: Record<string, number> } => {
+    // QR形式（B|で始まる行）をチェック
+    const lines = text.split('\n');
+    const blankLines = lines.filter(l => l.startsWith('B|'));
+    const normalLines = lines.filter(l => !l.startsWith('B|'));
+    
+    if (blankLines.length > 0) {
+      const { cards, counts } = decodeBlankCardsFromQR(blankLines.join('\n'));
+      return { normalText: normalLines.join('\n').trim(), blankCards: cards, blankCounts: counts };
+    }
+    
+    // 旧形式（---BLANK_CARDS---）も対応
     const separator = '---BLANK_CARDS---';
     if (text.includes(separator)) {
       const [normalText, blankJson] = text.split(separator);

@@ -3,18 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Card, COLOR_ORDER } from '@/lib/types';
 
-// 属性リスト
-const ATTRIBUTES = ['斬', '打', '射', '特', '知'];
-
-// よく使う特徴リスト
-const COMMON_FEATURES = [
-  '麦わらの一味', '四皇', '海軍', '王下七武海', '超新星', 
-  'ドンキホーテ海賊団', '百獣海賊団', 'ビッグ・マム海賊団', '赤髪海賊団',
-  '革命軍', 'FILM', '魚人族', 'SMILE', 'インペルダウン',
-  'アラバスタ王国', 'ドレスローザ', 'ワノ国', '空島',
-  'CP9', 'エッグヘッド', 'バロックワークス'
-];
-
 interface BlankCardModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -23,6 +11,8 @@ interface BlankCardModalProps {
   onDelete?: (cardId: string) => void;
   existingIds: string[];
   editCard?: Card | null;
+  availableFeatures?: string[]; // APIから取得した特徴リスト
+  availableAttributes?: string[]; // APIから取得した属性リスト
 }
 
 // ブランクカード用の一意IDを生成
@@ -39,7 +29,9 @@ export default function BlankCardModal({
   onUpdate,
   onDelete,
   existingIds,
-  editCard 
+  editCard,
+  availableFeatures = [],
+  availableAttributes = [],
 }: BlankCardModalProps) {
   const [cardId, setCardId] = useState('');
   const [cardName, setCardName] = useState('');
@@ -54,6 +46,7 @@ export default function BlankCardModal({
   const [effectText, setEffectText] = useState('');
   const [trigger, setTrigger] = useState('');
   const [error, setError] = useState<string>('');
+  const [featureFilter, setFeatureFilter] = useState(''); // 特徴の絞り込み用
   
   const isEditMode = !!editCard;
   
@@ -72,6 +65,7 @@ export default function BlankCardModal({
       setEffectText(editCard.text || '');
       setTrigger(editCard.trigger || '');
       setError('');
+      setFeatureFilter('');
     } else if (isOpen) {
       resetForm();
     }
@@ -91,9 +85,15 @@ export default function BlankCardModal({
     setEffectText('');
     setTrigger('');
     setError('');
+    setFeatureFilter('');
   };
   
   if (!isOpen) return null;
+  
+  // 特徴の絞り込み
+  const filteredFeatures = availableFeatures.filter(f => 
+    featureFilter === '' || f.toLowerCase().includes(featureFilter.toLowerCase())
+  );
   
   const handleSubmit = () => {
     let finalCardId = cardId.trim().toUpperCase();
@@ -315,7 +315,7 @@ export default function BlankCardModal({
               >
                 なし
               </button>
-              {ATTRIBUTES.map(attr => (
+              {availableAttributes.map(attr => (
                 <button
                   key={attr}
                   onClick={() => setAttribute(attr)}
@@ -381,32 +381,47 @@ export default function BlankCardModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               特徴（複数選択可）
             </label>
-            <div className="flex flex-wrap gap-1 mb-2 max-h-24 overflow-y-auto">
-              {COMMON_FEATURES.map(feature => (
-                <button
-                  key={feature}
-                  onClick={() => toggleFeature(feature)}
-                  className={`px-2 py-1 rounded border text-xs transition-colors ${
-                    selectedFeatures.includes(feature)
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {feature}
-                </button>
-              ))}
+            {/* 絞り込み検索 */}
+            <input
+              type="text"
+              value={featureFilter}
+              onChange={(e) => setFeatureFilter(e.target.value)}
+              placeholder="特徴を検索..."
+              className="w-full border rounded px-3 py-1.5 text-sm mb-2"
+            />
+            <div className="flex flex-wrap gap-1 mb-2 max-h-32 overflow-y-auto border rounded p-2 bg-gray-50">
+              {filteredFeatures.length > 0 ? (
+                filteredFeatures.map(feature => (
+                  <button
+                    key={feature}
+                    onClick={() => toggleFeature(feature)}
+                    className={`px-2 py-1 rounded border text-xs transition-colors ${
+                      selectedFeatures.includes(feature)
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {feature}
+                  </button>
+                ))
+              ) : (
+                <p className="text-xs text-gray-500">
+                  {availableFeatures.length === 0 ? '特徴データを読み込み中...' : '該当する特徴がありません'}
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={customFeature}
                 onChange={(e) => setCustomFeature(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addCustomFeature()}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomFeature())}
                 placeholder="カスタム特徴を入力"
                 className="flex-1 border rounded px-3 py-1.5 text-sm"
               />
               <button
                 onClick={addCustomFeature}
+                type="button"
                 className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
               >
                 追加

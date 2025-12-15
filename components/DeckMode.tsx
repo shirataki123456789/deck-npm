@@ -299,16 +299,66 @@ export default function DeckMode() {
   const handleChangeLeader = () => {
     setLeaderCard(null);
     setDeck({ name: '', leader: '', cards: {} });
+    setBlankCards([]);
     setView('leader');
+  };
+  
+  // ブランクカードをQR形式からデコード
+  const decodeBlankCardsFromText = (text: string): { normalText: string; cards: Card[]; counts: Record<string, number> } => {
+    const lines = text.split('\n');
+    const blankLines = lines.filter(l => l.startsWith('B|'));
+    const normalLines = lines.filter(l => !l.startsWith('B|'));
+    
+    if (blankLines.length === 0) {
+      return { normalText: text, cards: [], counts: {} };
+    }
+    
+    const cards: Card[] = [];
+    const counts: Record<string, number> = {};
+    
+    blankLines.forEach(line => {
+      const parts = line.split('|');
+      if (parts.length >= 10) {
+        const [, cardId, name, typeCode, colors, cost, power, counter, attr, count, features, effectText] = parts;
+        const type = typeCode === 'C' ? 'CHARACTER' : typeCode === 'E' ? 'EVENT' : 'STAGE';
+        
+        cards.push({
+          name: name || '不明カード',
+          card_id: cardId,
+          card_code: '',
+          type,
+          rarity: '?',
+          cost: parseInt(cost) || 0,
+          attribute: attr === '-' ? '' : attr,
+          power: parseInt(power) || 0,
+          counter: parseInt(counter) || 0,
+          color: colors ? colors.split(',') : [],
+          block_icon: '',
+          features: features ? features.split(',').filter(Boolean) : [],
+          text: effectText || '',
+          trigger: '',
+          source: 'ブランクカード（QRインポート）',
+          image_url: '',
+          is_parallel: false,
+          series_id: 'BLANK',
+        });
+        counts[cardId] = parseInt(count) || 1;
+      }
+    });
+    
+    return { normalText: normalLines.join('\n').trim(), cards, counts };
   };
   
   // デッキインポート
   const handleImportDeck = async (text: string) => {
     try {
+      // ブランクカードを抽出
+      const { normalText, cards: importedBlankCards, counts: blankCounts } = decodeBlankCardsFromText(text);
+      
       const res = await fetch('/api/deck', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'import', text }),
+        body: JSON.stringify({ action: 'import', text: normalText }),
       });
       const data = await res.json();
       
@@ -318,7 +368,30 @@ export default function DeckMode() {
       }
       
       if (data.deck) {
-        setDeck(data.deck);
+        // ブランクカードの枚数をデッキに追加
+        const deckWithBlank = {
+          ...data.deck,
+          cards: {
+            ...data.deck.cards,
+            ...blankCounts,
+          },
+        };
+        
+        setDeck(deckWithBlank);
+        
+        // ブランクカードを追加
+        if (importedBlankCards.length > 0) {
+          setBlankCards(prev => {
+            const existingIds = new Set(prev.map(c => c.card_id));
+            const newCards = importedBlankCards.filter(c => !existingIds.has(c.card_id));
+            return [...prev, ...newCards];
+          });
+          setAllCards(prev => {
+            const existingIds = new Set(prev.map(c => c.card_id));
+            const newCards = importedBlankCards.filter(c => !existingIds.has(c.card_id));
+            return [...prev, ...newCards];
+          });
+        }
         
         // リーダーカード情報を取得（allCardsから検索、またはAPIから取得）
         if (data.deck.leader) {
@@ -593,6 +666,8 @@ export default function DeckMode() {
         onDelete={handleDeleteBlankCard}
         existingIds={[...allCards.map(c => c.card_id), ...blankCards.map(c => c.card_id)]}
         editCard={editingBlankCard}
+        availableFeatures={filterMeta?.features || []}
+        availableAttributes={filterMeta?.attributes || []}
       />
     </div>
   );
