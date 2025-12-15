@@ -50,6 +50,20 @@ export default function DeckMode() {
   const [colsCount, setColsCount] = useState(4);
   const [showBlankCardModal, setShowBlankCardModal] = useState(false);
   
+  // ブランクカードインポートイベントのリスナー
+  useEffect(() => {
+    const handleImportBlankCards = (e: CustomEvent<Card[]>) => {
+      const newCards = e.detail;
+      setBlankCards(prev => [...prev, ...newCards]);
+      setAllCards(prev => [...prev, ...newCards]);
+    };
+    
+    window.addEventListener('importBlankCards', handleImportBlankCards as EventListener);
+    return () => {
+      window.removeEventListener('importBlankCards', handleImportBlankCards as EventListener);
+    };
+  }, []);
+  
   // 初回に全カードを取得してキャッシュ
   useEffect(() => {
     const fetchAllCards = async () => {
@@ -224,6 +238,52 @@ export default function DeckMode() {
     // 検索を再実行してリストに表示
     searchCards(filter);
   };
+  
+  // ブランクカードを更新
+  const handleUpdateBlankCard = (card: Card) => {
+    setBlankCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
+    setAllCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
+    searchCards(filter);
+  };
+  
+  // ブランクカードを削除
+  const handleDeleteBlankCard = (cardId: string) => {
+    setBlankCards(prev => prev.filter(c => c.card_id !== cardId));
+    setAllCards(prev => prev.filter(c => c.card_id !== cardId));
+    // デッキからも削除
+    setDeck(prev => {
+      const newCards = { ...prev.cards };
+      delete newCards[cardId];
+      return { ...prev, cards: newCards };
+    });
+    searchCards(filter);
+  };
+  
+  // ブランクカードをインポート
+  const handleImportBlankCards = (cards: Card[], counts: Record<string, number>) => {
+    // 既存のIDと重複しないようにする
+    const existingIds = new Set([...allCards.map(c => c.card_id), ...blankCards.map(c => c.card_id)]);
+    const newCards = cards.filter(c => !existingIds.has(c.card_id));
+    
+    if (newCards.length > 0) {
+      setBlankCards(prev => [...prev, ...newCards]);
+      setAllCards(prev => [...prev, ...newCards]);
+      
+      // デッキにも追加
+      setDeck(prev => {
+        const newDeckCards = { ...prev.cards };
+        newCards.forEach(c => {
+          newDeckCards[c.card_id] = counts[c.card_id] || 1;
+        });
+        return { ...prev, cards: newDeckCards };
+      });
+      
+      searchCards(filter);
+    }
+  };
+  
+  // 編集中のブランクカード
+  const [editingBlankCard, setEditingBlankCard] = useState<Card | null>(null);
   
   // カード追加可能かチェック
   const canAddCard = (cardId: string): boolean => {
@@ -512,15 +572,27 @@ export default function DeckMode() {
           onAddCard={handleAddCard}
           onPreview={() => setView('preview')}
           allCards={[...allCards, ...blankCards]}
+          blankCards={blankCards}
+          onEditBlankCard={(card) => {
+            setEditingBlankCard(card);
+            setShowBlankCardModal(true);
+          }}
+          onImportBlankCards={handleImportBlankCards}
         />
       )}
       
-      {/* ブランクカード追加モーダル */}
+      {/* ブランクカード追加/編集モーダル */}
       <BlankCardModal
         isOpen={showBlankCardModal}
-        onClose={() => setShowBlankCardModal(false)}
+        onClose={() => {
+          setShowBlankCardModal(false);
+          setEditingBlankCard(null);
+        }}
         onAdd={handleAddBlankCard}
+        onUpdate={handleUpdateBlankCard}
+        onDelete={handleDeleteBlankCard}
         existingIds={[...allCards.map(c => c.card_id), ...blankCards.map(c => c.card_id)]}
+        editCard={editingBlankCard}
       />
     </div>
   );

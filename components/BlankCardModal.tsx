@@ -1,63 +1,122 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, COLOR_ORDER } from '@/lib/types';
+
+// 属性リスト
+const ATTRIBUTES = ['斬', '打', '射', '特', '知'];
+
+// よく使う特徴リスト
+const COMMON_FEATURES = [
+  '麦わらの一味', '四皇', '海軍', '王下七武海', '超新星', 
+  'ドンキホーテ海賊団', '百獣海賊団', 'ビッグ・マム海賊団', '赤髪海賊団',
+  '革命軍', 'FILM', '魚人族', 'SMILE', 'インペルダウン',
+  'アラバスタ王国', 'ドレスローザ', 'ワノ国', '空島',
+  'CP9', 'エッグヘッド', 'バロックワークス'
+];
 
 interface BlankCardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (card: Card) => void;
-  existingIds: string[]; // 既存カードIDのリスト（重複チェック用）
+  onUpdate?: (card: Card) => void;
+  onDelete?: (cardId: string) => void;
+  existingIds: string[];
+  editCard?: Card | null;
 }
 
 // ブランクカード用の一意IDを生成
-let blankCardCounter = 0;
+let blankCardCounter = Date.now() % 10000;
 const generateBlankId = () => {
   blankCardCounter++;
-  return `BLANK-${String(blankCardCounter).padStart(3, '0')}`;
+  return `BLANK-${String(blankCardCounter).padStart(4, '0')}`;
 };
 
-export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: BlankCardModalProps) {
+export default function BlankCardModal({ 
+  isOpen, 
+  onClose, 
+  onAdd, 
+  onUpdate,
+  onDelete,
+  existingIds,
+  editCard 
+}: BlankCardModalProps) {
   const [cardId, setCardId] = useState('');
   const [cardName, setCardName] = useState('');
   const [cardType, setCardType] = useState<string>('CHARACTER');
-  const [selectedColors, setSelectedColors] = useState<string[]>(['赤']);
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [cost, setCost] = useState<number>(0);
   const [power, setPower] = useState<number>(5000);
   const [counter, setCounter] = useState<number>(1000);
+  const [attribute, setAttribute] = useState<string>('');
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
+  const [customFeature, setCustomFeature] = useState('');
+  const [effectText, setEffectText] = useState('');
+  const [trigger, setTrigger] = useState('');
   const [error, setError] = useState<string>('');
+  
+  const isEditMode = !!editCard;
+  
+  // 編集モード時にフォームを初期化
+  useEffect(() => {
+    if (editCard) {
+      setCardId(editCard.card_id);
+      setCardName(editCard.name);
+      setCardType(editCard.type);
+      setSelectedColors(editCard.color);
+      setCost(editCard.cost >= 0 ? editCard.cost : 0);
+      setPower(editCard.power);
+      setCounter(editCard.counter);
+      setAttribute(editCard.attribute || '');
+      setSelectedFeatures(editCard.features || []);
+      setEffectText(editCard.text || '');
+      setTrigger(editCard.trigger || '');
+      setError('');
+    } else if (isOpen) {
+      resetForm();
+    }
+  }, [editCard, isOpen]);
+  
+  const resetForm = () => {
+    setCardId('');
+    setCardName('');
+    setCardType('CHARACTER');
+    setSelectedColors([]);
+    setCost(0);
+    setPower(5000);
+    setCounter(1000);
+    setAttribute('');
+    setSelectedFeatures([]);
+    setCustomFeature('');
+    setEffectText('');
+    setTrigger('');
+    setError('');
+  };
   
   if (!isOpen) return null;
   
   const handleSubmit = () => {
-    if (selectedColors.length === 0) {
-      setError('色を1つ以上選択してください');
-      return;
-    }
-    
-    // IDが入力されている場合のみ形式チェック
     let finalCardId = cardId.trim().toUpperCase();
-    if (finalCardId) {
-      // ID形式チェック（例: OP10-001, ST01-001, EB01-001）
-      if (!/^[A-Z]{2,3}\d{2}-\d{3}$/i.test(finalCardId)) {
-        setError('カードIDの形式が正しくありません（例: OP10-001）');
-        return;
-      }
-      
-      // 重複チェック
-      if (existingIds.includes(finalCardId)) {
-        setError('このカードIDは既に存在します');
-        return;
-      }
+    
+    if (isEditMode) {
+      finalCardId = editCard!.card_id;
     } else {
-      // IDが空の場合は自動生成
-      finalCardId = generateBlankId();
+      if (finalCardId) {
+        if (!/^[A-Z]{2,3}\d{2}-\d{3}$/i.test(finalCardId)) {
+          setError('カードIDの形式が正しくありません（例: OP10-001）');
+          return;
+        }
+        if (existingIds.includes(finalCardId)) {
+          setError('このカードIDは既に存在します');
+          return;
+        }
+      } else {
+        finalCardId = generateBlankId();
+      }
     }
     
-    // カード名が空の場合のデフォルト
     const finalName = cardName.trim() || '不明カード';
     
-    // ブランクカードを作成
     const blankCard: Card = {
       name: finalName,
       card_id: finalCardId,
@@ -65,32 +124,38 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
       type: cardType,
       rarity: '?',
       cost: cardType === 'LEADER' ? -1 : cost,
-      attribute: '',
+      attribute: attribute,
       power: power,
       counter: counter,
       color: selectedColors,
       block_icon: '',
-      features: [],
-      text: '',
-      trigger: '',
+      features: selectedFeatures,
+      text: effectText,
+      trigger: trigger,
       source: 'ブランクカード（手動追加）',
-      image_url: '', // 空の場合はプレースホルダー表示
+      image_url: '',
       is_parallel: false,
       series_id: 'BLANK',
     };
     
-    onAdd(blankCard);
+    if (isEditMode && onUpdate) {
+      onUpdate(blankCard);
+    } else {
+      onAdd(blankCard);
+    }
     
-    // フォームリセット
-    setCardId('');
-    setCardName('');
-    setCardType('CHARACTER');
-    setSelectedColors(['赤']);
-    setCost(0);
-    setPower(5000);
-    setCounter(1000);
-    setError('');
+    resetForm();
     onClose();
+  };
+  
+  const handleDelete = () => {
+    if (editCard && onDelete) {
+      if (confirm(`「${editCard.name}」を削除しますか？\nデッキ内のこのカードも削除されます。`)) {
+        onDelete(editCard.card_id);
+        resetForm();
+        onClose();
+      }
+    }
   };
   
   const toggleColor = (color: string) => {
@@ -101,8 +166,23 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
     );
   };
   
-  // プレビュー用のID表示
-  const previewId = cardId.trim().toUpperCase() || '(自動生成)';
+  const toggleFeature = (feature: string) => {
+    setSelectedFeatures(prev =>
+      prev.includes(feature)
+        ? prev.filter(f => f !== feature)
+        : [...prev, feature]
+    );
+  };
+  
+  const addCustomFeature = () => {
+    const trimmed = customFeature.trim();
+    if (trimmed && !selectedFeatures.includes(trimmed)) {
+      setSelectedFeatures(prev => [...prev, trimmed]);
+      setCustomFeature('');
+    }
+  };
+  
+  const previewId = isEditMode ? editCard!.card_id : (cardId.trim().toUpperCase() || '(自動生成)');
   const previewName = cardName.trim() || '不明カード';
   
   return (
@@ -111,11 +191,13 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="text-lg font-bold">📝 ブランクカードを追加</h2>
+        <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+          <h2 className="text-lg font-bold">
+            {isEditMode ? '✏️ ブランクカードを編集' : '📝 ブランクカードを追加'}
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 text-xl"
@@ -145,21 +227,29 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
             />
           </div>
           
-          {/* カードID（任意） */}
+          {/* カードID */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              カードID（任意）
+              カードID{!isEditMode && '（任意）'}
             </label>
-            <input
-              type="text"
-              value={cardId}
-              onChange={(e) => { setCardId(e.target.value); setError(''); }}
-              placeholder="例: OP10-001（空欄で自動生成）"
-              className="w-full border rounded px-3 py-2 text-sm"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              空欄の場合は自動でIDが生成されます
-            </p>
+            {isEditMode ? (
+              <div className="px-3 py-2 bg-gray-100 rounded text-sm text-gray-600">
+                {editCard!.card_id}（変更不可）
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  value={cardId}
+                  onChange={(e) => { setCardId(e.target.value); setError(''); }}
+                  placeholder="例: OP10-001（空欄で自動生成）"
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  空欄の場合は自動でIDが生成されます
+                </p>
+              </>
+            )}
           </div>
           
           {/* タイプ */}
@@ -184,10 +274,10 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
             </div>
           </div>
           
-          {/* 色 */}
+          {/* 色（任意） */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              色 <span className="text-red-500">*</span>
+              色（任意・複数選択可）
             </label>
             <div className="flex flex-wrap gap-2">
               {COLOR_ORDER.map(color => (
@@ -201,6 +291,41 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
                   }`}
                 >
                   {color}
+                </button>
+              ))}
+            </div>
+            {selectedColors.length === 0 && (
+              <p className="text-xs text-gray-500 mt-1">未選択の場合、グレーで表示されます</p>
+            )}
+          </div>
+          
+          {/* 属性 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              属性
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setAttribute('')}
+                className={`px-3 py-1.5 rounded border text-sm transition-colors ${
+                  attribute === ''
+                    ? 'bg-gray-600 text-white border-gray-600'
+                    : 'bg-white border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                なし
+              </button>
+              {ATTRIBUTES.map(attr => (
+                <button
+                  key={attr}
+                  onClick={() => setAttribute(attr)}
+                  className={`px-3 py-1.5 rounded border text-sm transition-colors ${
+                    attribute === attr
+                      ? 'bg-purple-600 text-white border-purple-600'
+                      : 'bg-white border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {attr}
                 </button>
               ))}
             </div>
@@ -251,34 +376,145 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
             </div>
           </div>
           
+          {/* 特徴 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              特徴（複数選択可）
+            </label>
+            <div className="flex flex-wrap gap-1 mb-2 max-h-24 overflow-y-auto">
+              {COMMON_FEATURES.map(feature => (
+                <button
+                  key={feature}
+                  onClick={() => toggleFeature(feature)}
+                  className={`px-2 py-1 rounded border text-xs transition-colors ${
+                    selectedFeatures.includes(feature)
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {feature}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customFeature}
+                onChange={(e) => setCustomFeature(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addCustomFeature()}
+                placeholder="カスタム特徴を入力"
+                className="flex-1 border rounded px-3 py-1.5 text-sm"
+              />
+              <button
+                onClick={addCustomFeature}
+                className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+              >
+                追加
+              </button>
+            </div>
+            {selectedFeatures.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                <span className="text-xs text-gray-500">選択中:</span>
+                {selectedFeatures.map(f => (
+                  <span
+                    key={f}
+                    onClick={() => toggleFeature(f)}
+                    className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-blue-200"
+                  >
+                    {f} ✕
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* 効果テキスト */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              効果テキスト・メモ
+            </label>
+            <textarea
+              value={effectText}
+              onChange={(e) => setEffectText(e.target.value)}
+              placeholder="カードの効果やメモを入力..."
+              rows={3}
+              className="w-full border rounded px-3 py-2 text-sm resize-none"
+            />
+          </div>
+          
+          {/* トリガー */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              トリガー効果
+            </label>
+            <input
+              type="text"
+              value={trigger}
+              onChange={(e) => setTrigger(e.target.value)}
+              placeholder="例: このカードを手札に加える"
+              className="w-full border rounded px-3 py-2 text-sm"
+            />
+          </div>
+          
           {/* プレビュー */}
           <div className="bg-gray-100 rounded p-3">
             <p className="text-sm font-medium text-gray-700 mb-2">プレビュー</p>
-            <div className="flex items-center gap-3">
-              {/* プレースホルダー画像 */}
-              <div className="w-20 aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 rounded flex flex-col items-center justify-center text-gray-600 text-xs">
-                <span className="text-2xl mb-1">?</span>
-                <span className="px-1 text-center truncate w-full text-[10px]">{previewName}</span>
+            <div className="flex gap-3">
+              <div 
+                className={`w-20 aspect-[400/560] rounded flex flex-col items-center justify-center text-xs ${
+                  selectedColors.length > 0 
+                    ? 'bg-gradient-to-br from-gray-400 to-gray-500' 
+                    : 'bg-gradient-to-br from-gray-300 to-gray-400'
+                }`}
+                style={selectedColors.length === 1 ? {
+                  background: `var(--color-${selectedColors[0]}, #888)`
+                } : undefined}
+              >
+                <span className="text-white text-2xl mb-1 drop-shadow">?</span>
+                <span className="px-1 text-center truncate w-full text-[10px] text-white drop-shadow">{previewName}</span>
               </div>
-              <div className="flex-1">
-                <p className="font-medium">{previewName}</p>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{previewName}</p>
                 <p className="text-sm text-gray-600">{previewId}</p>
-                <div className="flex gap-1 mt-1">
+                <div className="flex gap-1 mt-1 flex-wrap">
                   {selectedColors.map(c => (
                     <span key={c} className={`color-badge color-badge-${c} text-xs`}>
                       {c}
                     </span>
                   ))}
+                  {attribute && (
+                    <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-xs">
+                      {attribute}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {cardType} / コスト{cost} / パワー{power} / カウンター{counter > 0 ? `+${counter}` : 'なし'}
+                  {cardType} / コスト{cost} / パワー{power} / C{counter > 0 ? `+${counter}` : 'なし'}
                 </p>
+                {selectedFeatures.length > 0 && (
+                  <p className="text-xs text-gray-500 truncate">
+                    特徴: {selectedFeatures.join(', ')}
+                  </p>
+                )}
+                {effectText && (
+                  <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                    {effectText}
+                  </p>
+                )}
               </div>
             </div>
           </div>
         </div>
         
-        <div className="p-4 border-t flex gap-2">
+        <div className="p-4 border-t flex gap-2 sticky bottom-0 bg-white">
+          {isEditMode && onDelete && (
+            <button
+              onClick={handleDelete}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+            >
+              🗑️ 削除
+            </button>
+          )}
           <button
             onClick={onClose}
             className="flex-1 btn btn-secondary"
@@ -289,7 +525,7 @@ export default function BlankCardModal({ isOpen, onClose, onAdd, existingIds }: 
             onClick={handleSubmit}
             className="flex-1 btn btn-primary"
           >
-            追加する
+            {isEditMode ? '更新する' : '追加する'}
           </button>
         </div>
       </div>
