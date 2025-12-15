@@ -144,32 +144,77 @@ function drawBlankCardPlaceholder(
   const name = card.name.length > 10 ? card.name.slice(0, 10) + '...' : card.name;
   ctx.fillText(name, x + width / 2, y + 25, width - 10);
   
-  // コスト（大きく中央）
-  ctx.font = 'bold 48px sans-serif';
-  ctx.fillText(String(card.cost >= 0 ? card.cost : '-'), x + width / 2, y + height / 2 - 20);
-  
-  // パワー
-  if (card.power > 0) {
-    ctx.font = 'bold 16px sans-serif';
-    ctx.fillText(`${card.power}`, x + width / 2, y + height / 2 + 20);
+  // 属性（名前の下）
+  if (card.attribute) {
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillText(`[${card.attribute}]`, x + width / 2, y + 40);
   }
   
-  // カウンター（下部）
-  ctx.font = '12px sans-serif';
-  const counterText = card.counter > 0 ? `+${card.counter}` : 'カウンターなし';
-  ctx.fillText(counterText, x + width / 2, y + height - 40);
+  ctx.fillStyle = 'white';
+  
+  // コスト・パワー・カウンター（中央上部）
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillText(String(card.cost >= 0 ? card.cost : '-'), x + width / 2, y + height / 3);
+  
+  // パワーとカウンター
+  ctx.font = '11px sans-serif';
+  const statsText = `P:${card.power} / C:${card.counter > 0 ? `+${card.counter}` : '-'}`;
+  ctx.fillText(statsText, x + width / 2, y + height / 3 + 20);
+  
+  // 特徴（中央）
+  if (card.features.length > 0) {
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    const featuresText = card.features.slice(0, 2).join('/');
+    const displayFeatures = featuresText.length > 15 ? featuresText.slice(0, 15) + '...' : featuresText;
+    ctx.fillText(displayFeatures, x + width / 2, y + height / 2 + 10, width - 10);
+  }
+  
+  // 効果テキスト（下部・複数行）
+  if (card.text) {
+    ctx.font = '8px sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.textAlign = 'left';
+    
+    const maxCharsPerLine = 20;
+    const lines: string[] = [];
+    let text = card.text.replace(/\n/g, ' ');
+    
+    while (text.length > 0 && lines.length < 4) {
+      if (text.length <= maxCharsPerLine) {
+        lines.push(text);
+        break;
+      }
+      lines.push(text.slice(0, maxCharsPerLine));
+      text = text.slice(maxCharsPerLine);
+    }
+    if (text.length > 0 && lines.length === 4) {
+      lines[3] = lines[3].slice(0, maxCharsPerLine - 3) + '...';
+    }
+    
+    const startY = y + height / 2 + 30;
+    lines.forEach((line, i) => {
+      ctx.fillText(line, x + 5, startY + i * 11, width - 10);
+    });
+    
+    ctx.textAlign = 'center';
+  }
+  
+  ctx.fillStyle = 'white';
   
   // カードID（最下部）
-  ctx.font = '10px sans-serif';
+  ctx.font = '9px sans-serif';
   ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-  ctx.fillText(card.card_id, x + width / 2, y + height - 15);
+  ctx.textAlign = 'center';
+  ctx.fillText(card.card_id, x + width / 2, y + height - 10);
   
   // 「仮」マーク
   ctx.fillStyle = 'rgba(128, 0, 255, 0.8)';
-  ctx.fillRect(x + 5, y + 5, 30, 18);
+  ctx.fillRect(x + 3, y + 3, 24, 14);
   ctx.fillStyle = 'white';
-  ctx.font = 'bold 12px sans-serif';
-  ctx.fillText('仮', x + 20, y + 17);
+  ctx.font = 'bold 10px sans-serif';
+  ctx.fillText('仮', x + 15, y + 13);
 }
 
 export interface DeckImageCard {
