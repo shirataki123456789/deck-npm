@@ -17,7 +17,6 @@ interface DeckSidebarProps {
   allCards?: Card[];
   blankCards?: Card[];
   onEditBlankCard?: (card: Card) => void;
-  onImportBlankCards?: (cards: Card[], counts: Record<string, number>) => void;
 }
 
 interface DeckCardInfo {
@@ -27,52 +26,6 @@ interface DeckCardInfo {
   image_url?: string;
   card?: Card;
 }
-
-// ブランクカードをJSON形式でシリアライズ（特徴と効果テキストも含む）
-const serializeBlankCards = (cards: Card[]): string => {
-  return JSON.stringify(cards.map(c => ({
-    id: c.card_id,
-    name: c.name,
-    type: c.type,
-    color: c.color,
-    cost: c.cost,
-    power: c.power,
-    counter: c.counter,
-    attribute: c.attribute,
-    features: c.features,
-    text: c.text,
-    trigger: c.trigger,
-  })));
-};
-
-// ブランクカードをJSONからデシリアライズ
-const deserializeBlankCards = (json: string): Card[] => {
-  try {
-    const data = JSON.parse(json);
-    return data.map((c: any) => ({
-      name: c.name || '不明カード',
-      card_id: c.id || `BLANK-${Date.now()}`,
-      card_code: '',
-      type: c.type || 'CHARACTER',
-      rarity: '?',
-      cost: c.cost ?? 0,
-      attribute: c.attribute || '',
-      power: c.power ?? 0,
-      counter: c.counter ?? 0,
-      color: c.color || [],
-      block_icon: '',
-      features: c.features || [],
-      text: c.text || '',
-      trigger: c.trigger || '',
-      source: 'ブランクカード（インポート）',
-      image_url: '',
-      is_parallel: false,
-      series_id: 'BLANK',
-    }));
-  } catch {
-    return [];
-  }
-};
 
 export default function DeckSidebar({
   deck,
@@ -86,17 +39,12 @@ export default function DeckSidebar({
   allCards = [],
   blankCards = [],
   onEditBlankCard,
-  onImportBlankCards,
 }: DeckSidebarProps) {
   const [deckCardInfos, setDeckCardInfos] = useState<DeckCardInfo[]>([]);
   const [exportText, setExportText] = useState('');
   const [showExport, setShowExport] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generateProgress, setGenerateProgress] = useState('');
-  const [showBlankExport, setShowBlankExport] = useState(false);
-  const [blankExportText, setBlankExportText] = useState('');
-  const [showBlankImport, setShowBlankImport] = useState(false);
-  const [blankImportText, setBlankImportText] = useState('');
   
   const totalCards = Object.values(deck.cards).reduce((sum, count) => sum + count, 0);
   
@@ -192,164 +140,6 @@ export default function DeckSidebar({
       console.error('Export error:', error);
       alert('エクスポートに失敗しました');
     }
-  };
-  
-  // ブランクカードを圧縮形式でエンコード（QRコード用）
-  // 形式: B|連番|名前|タイプ|色|コスト|パワー|カウンター|枚数
-  const encodeBlankCardsForQR = (cards: Card[], counts: Record<string, number>): string => {
-    // 極力短縮: B|連番|名前(最大8文字)|T|色|C|P|CT|枚数
-    return cards.map((c, idx) => {
-      const typeCode = c.type === 'CHARACTER' ? 'C' : c.type === 'EVENT' ? 'E' : 'S';
-      // 色は頭文字のみ（赤→R, 青→B, 緑→G, 紫→P, 黒→K, 黄→Y）
-      const colorMap: Record<string, string> = { '赤': 'R', '青': 'B', '緑': 'G', '紫': 'P', '黒': 'K', '黄': 'Y' };
-      const colors = c.color.map(col => colorMap[col] || col[0]).join('');
-      const count = counts[c.card_id] || 1;
-      const name = c.name.slice(0, 8); // 名前は最大8文字
-      const power = Math.floor(c.power / 1000); // パワーは1000単位
-      const counter = Math.floor(c.counter / 1000); // カウンターも1000単位
-      return `B|${idx}|${name}|${typeCode}|${colors}|${c.cost}|${power}|${counter}|${count}`;
-    }).join('\n');
-  };
-  
-  // 圧縮形式からブランクカードをデコード
-  const decodeBlankCardsFromQR = (encoded: string): { cards: Card[]; counts: Record<string, number> } => {
-    const cards: Card[] = [];
-    const counts: Record<string, number> = {};
-    
-    // 色の逆変換マップ
-    const colorRevMap: Record<string, string> = { 'R': '赤', 'B': '青', 'G': '緑', 'P': '紫', 'K': '黒', 'Y': '黄' };
-    
-    const lines = encoded.split('\n').filter(l => l.startsWith('B|'));
-    lines.forEach((line, lineIdx) => {
-      const parts = line.split('|');
-      if (parts.length >= 9) {
-        const [, idx, name, typeCode, colors, cost, power, counter, count] = parts;
-        const type = typeCode === 'C' ? 'CHARACTER' : typeCode === 'E' ? 'EVENT' : 'STAGE';
-        const cardId = `BLANK-${String(lineIdx + 1).padStart(4, '0')}`;
-        
-        // 色を復元
-        const colorArray = colors.split('').map(c => colorRevMap[c] || c).filter(Boolean);
-        
-        cards.push({
-          name: name || '不明カード',
-          card_id: cardId,
-          card_code: '',
-          type,
-          rarity: '?',
-          cost: parseInt(cost) || 0,
-          attribute: '',
-          power: (parseInt(power) || 0) * 1000,
-          counter: (parseInt(counter) || 0) * 1000,
-          color: colorArray,
-          block_icon: '',
-          features: [],
-          text: '',
-          trigger: '',
-          source: 'ブランクカード（QRインポート）',
-          image_url: '',
-          is_parallel: false,
-          series_id: 'BLANK',
-        });
-        counts[cardId] = parseInt(count) || 1;
-      }
-    });
-    
-    return { cards, counts };
-  };
-  
-  // ブランクカード込みエクスポート（QR対応形式）
-  const handleExportWithBlankCards = async () => {
-    try {
-      // 通常カードのエクスポート
-      const normalDeck = {
-        ...deck,
-        cards: Object.fromEntries(
-          Object.entries(deck.cards).filter(([id]) => !id.startsWith('BLANK-'))
-        ),
-      };
-      
-      const res = await fetch('/api/deck', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'export',
-          deck: normalDeck,
-        }),
-      });
-      const data = await res.json();
-      const normalText = data.text || '';
-      
-      // ブランクカード部分（QR対応圧縮形式）
-      const blankCardsInDeck = blankCards.filter(c => deck.cards[c.card_id]);
-      const blankCounts: Record<string, number> = {};
-      blankCardsInDeck.forEach(c => { blankCounts[c.card_id] = deck.cards[c.card_id]; });
-      
-      const blankEncoded = encodeBlankCardsForQR(blankCardsInDeck, blankCounts);
-      
-      // 拡張形式：通常テキスト + ブランクカード（QR形式）
-      const extendedText = blankEncoded
-        ? `${normalText}\n${blankEncoded}`
-        : normalText;
-      
-      setExportText(extendedText);
-      setShowExport(true);
-    } catch (error) {
-      console.error('Export error:', error);
-      alert('エクスポートに失敗しました');
-    }
-  };
-  
-  // 拡張形式のインポート処理（QR形式対応）
-  const parseExtendedDeckText = (text: string): { normalText: string; blankCards: Card[]; blankCounts: Record<string, number> } => {
-    // QR形式（B|で始まる行）をチェック
-    const lines = text.split('\n');
-    const blankLines = lines.filter(l => l.startsWith('B|'));
-    const normalLines = lines.filter(l => !l.startsWith('B|'));
-    
-    if (blankLines.length > 0) {
-      const { cards, counts } = decodeBlankCardsFromQR(blankLines.join('\n'));
-      return { normalText: normalLines.join('\n').trim(), blankCards: cards, blankCounts: counts };
-    }
-    
-    // 旧形式（---BLANK_CARDS---）も対応
-    const separator = '---BLANK_CARDS---';
-    if (text.includes(separator)) {
-      const [normalText, blankJson] = text.split(separator);
-      try {
-        const blankData = JSON.parse(blankJson.trim());
-        const cards: Card[] = [];
-        const counts: Record<string, number> = {};
-        
-        blankData.forEach((c: any) => {
-          cards.push({
-            name: c.name || '不明カード',
-            card_id: c.card_id || `BLANK-${Date.now()}`,
-            card_code: '',
-            type: c.type || 'CHARACTER',
-            rarity: '?',
-            cost: c.cost ?? 0,
-            attribute: c.attribute || '',
-            power: c.power ?? 0,
-            counter: c.counter ?? 0,
-            color: c.color || [],
-            block_icon: '',
-            features: c.features || [],
-            text: c.text || '',
-            trigger: c.trigger || '',
-            source: 'ブランクカード（インポート）',
-            image_url: '',
-            is_parallel: false,
-            series_id: 'BLANK',
-          });
-          counts[c.card_id] = c.count || 1;
-        });
-        
-        return { normalText: normalText.trim(), blankCards: cards, blankCounts: counts };
-      } catch {
-        return { normalText: text, blankCards: [], blankCounts: {} };
-      }
-    }
-    return { normalText: text, blankCards: [], blankCounts: {} };
   };
   
   // デッキ画像生成（クライアントサイド）
@@ -578,23 +368,12 @@ export default function DeckSidebar({
             👁️ デッキプレビュー
           </button>
           
-          <div className="flex gap-2">
-            <button
-              onClick={handleExport}
-              className="flex-1 btn btn-secondary btn-sm"
-            >
-              📤 エクスポート
-            </button>
-            {blankCards.some(c => deck.cards[c.card_id]) && (
-              <button
-                onClick={handleExportWithBlankCards}
-                className="flex-1 btn bg-purple-600 text-white hover:bg-purple-700 btn-sm text-xs"
-                title="ブランクカード込みでエクスポート"
-              >
-                📤 全込み
-              </button>
-            )}
-          </div>
+          <button
+            onClick={handleExport}
+            className="w-full btn btn-secondary btn-sm"
+          >
+            📤 エクスポート
+          </button>
           
           <button
             onClick={handleGenerateImage}
@@ -609,7 +388,7 @@ export default function DeckSidebar({
         {blankCards.length > 0 && (
           <div className="mt-4 p-3 bg-purple-50 rounded-lg">
             <h4 className="font-medium text-sm mb-2 text-purple-800">
-              📝 ブランクカード ({blankCards.length}枚)
+              📝 ブランクカード ({blankCards.length}種)
             </h4>
             <div className="space-y-1 max-h-32 overflow-y-auto">
               {blankCards.map(card => (
@@ -632,29 +411,8 @@ export default function DeckSidebar({
                 </div>
               ))}
             </div>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => {
-                  setBlankExportText(serializeBlankCards(blankCards));
-                  setShowBlankExport(true);
-                }}
-                className="flex-1 btn btn-sm bg-purple-600 text-white hover:bg-purple-700"
-              >
-                エクスポート
-              </button>
-            </div>
           </div>
         )}
-        
-        {/* ブランクカードインポートボタン */}
-        <div className="mt-2">
-          <button
-            onClick={() => setShowBlankImport(true)}
-            className="w-full btn btn-sm btn-secondary text-xs"
-          >
-            📥 ブランクカードをインポート
-          </button>
-        </div>
         
         {/* エクスポートテキスト表示 */}
         {showExport && (
@@ -717,83 +475,6 @@ export default function DeckSidebar({
                 )}
               </div>
             )}
-          </div>
-        )}
-        
-        {/* ブランクカードエクスポート */}
-        {showBlankExport && (
-          <div className="mt-4 p-3 bg-purple-50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="font-medium text-sm text-purple-800">ブランクカードエクスポート</h4>
-              <button
-                onClick={() => setShowBlankExport(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
-            </div>
-            <textarea
-              readOnly
-              value={blankExportText}
-              className="w-full border rounded px-2 py-1 text-xs h-24 font-mono"
-            />
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(blankExportText);
-                  alert('コピーしました');
-                }}
-                className="flex-1 btn btn-sm bg-purple-600 text-white hover:bg-purple-700"
-              >
-                コピー
-              </button>
-            </div>
-            <p className="text-xs text-purple-600 mt-2">
-              ※ このテキストを保存しておくと、後でインポートできます
-            </p>
-          </div>
-        )}
-        
-        {/* ブランクカードインポート */}
-        {showBlankImport && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="font-medium text-sm text-blue-800">ブランクカードインポート</h4>
-              <button
-                onClick={() => {
-                  setShowBlankImport(false);
-                  setBlankImportText('');
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
-            </div>
-            <textarea
-              value={blankImportText}
-              onChange={(e) => setBlankImportText(e.target.value)}
-              placeholder="ブランクカードのJSONを貼り付け..."
-              className="w-full border rounded px-2 py-1 text-xs h-24 font-mono"
-            />
-            <button
-              onClick={() => {
-                const cards = deserializeBlankCards(blankImportText);
-                if (cards.length > 0 && onImportBlankCards) {
-                  // 枚数を1としてインポート
-                  const counts: Record<string, number> = {};
-                  cards.forEach(c => { counts[c.card_id] = 1; });
-                  onImportBlankCards(cards, counts);
-                  alert(`${cards.length}枚のブランクカードをインポートしました`);
-                  setShowBlankImport(false);
-                  setBlankImportText('');
-                } else if (cards.length === 0) {
-                  alert('インポートに失敗しました。JSONの形式を確認してください。');
-                }
-              }}
-              className="w-full mt-2 btn btn-sm bg-blue-600 text-white hover:bg-blue-700"
-            >
-              インポート
-            </button>
           </div>
         )}
       </div>

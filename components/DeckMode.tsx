@@ -259,29 +259,6 @@ export default function DeckMode() {
     searchCards(filter);
   };
   
-  // ブランクカードをインポート
-  const handleImportBlankCards = (cards: Card[], counts: Record<string, number>) => {
-    // 既存のIDと重複しないようにする
-    const existingIds = new Set([...allCards.map(c => c.card_id), ...blankCards.map(c => c.card_id)]);
-    const newCards = cards.filter(c => !existingIds.has(c.card_id));
-    
-    if (newCards.length > 0) {
-      setBlankCards(prev => [...prev, ...newCards]);
-      setAllCards(prev => [...prev, ...newCards]);
-      
-      // デッキにも追加
-      setDeck(prev => {
-        const newDeckCards = { ...prev.cards };
-        newCards.forEach(c => {
-          newDeckCards[c.card_id] = counts[c.card_id] || 1;
-        });
-        return { ...prev, cards: newDeckCards };
-      });
-      
-      searchCards(filter);
-    }
-  };
-  
   // 編集中のブランクカード
   const [editingBlankCard, setEditingBlankCard] = useState<Card | null>(null);
   
@@ -303,76 +280,13 @@ export default function DeckMode() {
     setView('leader');
   };
   
-  // ブランクカードをQR形式からデコード
-  const decodeBlankCardsFromText = (text: string): { normalText: string; cards: Card[]; counts: Record<string, number> } => {
-    console.log('Decoding text:', text);
-    const lines = text.split('\n');
-    const blankLines = lines.filter(l => l.startsWith('B|'));
-    const normalLines = lines.filter(l => !l.startsWith('B|'));
-    
-    console.log('Blank lines found:', blankLines.length, blankLines);
-    
-    if (blankLines.length === 0) {
-      return { normalText: text, cards: [], counts: {} };
-    }
-    
-    const cards: Card[] = [];
-    const counts: Record<string, number> = {};
-    
-    // 色の逆変換マップ
-    const colorRevMap: Record<string, string> = { 'R': '赤', 'B': '青', 'G': '緑', 'P': '紫', 'K': '黒', 'Y': '黄' };
-    
-    blankLines.forEach((line, lineIdx) => {
-      const parts = line.split('|');
-      console.log('Parsing blank line:', line, 'parts:', parts.length);
-      if (parts.length >= 9) {
-        // 短縮形式: B|連番|名前|タイプ|色|コスト|パワー|カウンター|枚数
-        const [, idx, name, typeCode, colors, cost, power, counter, count] = parts;
-        const type = typeCode === 'C' ? 'CHARACTER' : typeCode === 'E' ? 'EVENT' : 'STAGE';
-        const cardId = `BLANK-${String(lineIdx + 1).padStart(4, '0')}`;
-        
-        // 色を復元（R→赤、B→青など）
-        const colorArray = colors.split('').map(c => colorRevMap[c] || c).filter(Boolean);
-        
-        cards.push({
-          name: name || '不明カード',
-          card_id: cardId,
-          card_code: '',
-          type,
-          rarity: '?',
-          cost: parseInt(cost) || 0,
-          attribute: '',
-          power: (parseInt(power) || 0) * 1000, // 1000単位から復元
-          counter: (parseInt(counter) || 0) * 1000,
-          color: colorArray,
-          block_icon: '',
-          features: [],
-          text: '',
-          trigger: '',
-          source: 'ブランクカード（QRインポート）',
-          image_url: '',
-          is_parallel: false,
-          series_id: 'BLANK',
-        });
-        counts[cardId] = parseInt(count) || 1;
-        console.log('Added blank card:', cardId, name, colorArray);
-      }
-    });
-    
-    console.log('Total blank cards decoded:', cards.length);
-    return { normalText: normalLines.join('\n').trim(), cards, counts };
-  };
-  
-  // デッキインポート
+  // デッキインポート（通常のデッキのみ、ブランクカードは含まない）
   const handleImportDeck = async (text: string) => {
     try {
-      // ブランクカードを抽出
-      const { normalText, cards: importedBlankCards, counts: blankCounts } = decodeBlankCardsFromText(text);
-      
       const res = await fetch('/api/deck', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'import', text: normalText }),
+        body: JSON.stringify({ action: 'import', text }),
       });
       const data = await res.json();
       
@@ -382,35 +296,7 @@ export default function DeckMode() {
       }
       
       if (data.deck) {
-        // ブランクカードの枚数をデッキに追加
-        const deckWithBlank = {
-          ...data.deck,
-          cards: {
-            ...data.deck.cards,
-            ...blankCounts,
-          },
-        };
-        
-        setDeck(deckWithBlank);
-        
-        // ブランクカードを追加
-        if (importedBlankCards.length > 0) {
-          console.log('Importing blank cards:', importedBlankCards);
-          setBlankCards(prev => {
-            const existingIds = new Set(prev.map(c => c.card_id));
-            const newCards = importedBlankCards.filter(c => !existingIds.has(c.card_id));
-            console.log('New blank cards to add:', newCards.length);
-            return [...prev, ...newCards];
-          });
-          setAllCards(prev => {
-            const existingIds = new Set(prev.map(c => c.card_id));
-            const newCards = importedBlankCards.filter(c => !existingIds.has(c.card_id));
-            return [...prev, ...newCards];
-          });
-          
-          // ブランクカードインポート成功メッセージ
-          alert(`デッキをインポートしました（ブランクカード ${importedBlankCards.length}種類を含む）`);
-        }
+        setDeck(data.deck);
         
         // リーダーカード情報を取得（allCardsから検索、またはAPIから取得）
         if (data.deck.leader) {
@@ -669,7 +555,6 @@ export default function DeckMode() {
             setEditingBlankCard(card);
             setShowBlankCardModal(true);
           }}
-          onImportBlankCards={handleImportBlankCards}
         />
       )}
       
