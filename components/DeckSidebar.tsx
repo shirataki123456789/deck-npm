@@ -195,17 +195,19 @@ export default function DeckSidebar({
   };
   
   // ブランクカードを圧縮形式でエンコード（QRコード用）
+  // 形式: B|連番|名前|タイプ|色|コスト|パワー|カウンター|枚数
   const encodeBlankCardsForQR = (cards: Card[], counts: Record<string, number>): string => {
-    // 短縮形式: B|id|name|type|colors|cost|power|counter|attr|count
-    // 例: B|BLANK-0001|ルフィ|C|赤|5|6000|1000|斬|4
-    return cards.map(c => {
+    // 極力短縮: B|連番|名前(最大8文字)|T|色|C|P|CT|枚数
+    return cards.map((c, idx) => {
       const typeCode = c.type === 'CHARACTER' ? 'C' : c.type === 'EVENT' ? 'E' : 'S';
-      const colors = c.color.join(',');
+      // 色は頭文字のみ（赤→R, 青→B, 緑→G, 紫→P, 黒→K, 黄→Y）
+      const colorMap: Record<string, string> = { '赤': 'R', '青': 'B', '緑': 'G', '紫': 'P', '黒': 'K', '黄': 'Y' };
+      const colors = c.color.map(col => colorMap[col] || col[0]).join('');
       const count = counts[c.card_id] || 1;
-      // 特徴と効果は長くなるので省略（別途インポート時に補完可能）
-      const features = c.features.slice(0, 2).join(','); // 最大2つ
-      const text = c.text ? c.text.slice(0, 30) : ''; // 最大30文字
-      return `B|${c.card_id}|${c.name}|${typeCode}|${colors}|${c.cost}|${c.power}|${c.counter}|${c.attribute || '-'}|${count}|${features}|${text}`;
+      const name = c.name.slice(0, 8); // 名前は最大8文字
+      const power = Math.floor(c.power / 1000); // パワーは1000単位
+      const counter = Math.floor(c.counter / 1000); // カウンターも1000単位
+      return `B|${idx}|${name}|${typeCode}|${colors}|${c.cost}|${power}|${counter}|${count}`;
     }).join('\n');
   };
   
@@ -214,12 +216,19 @@ export default function DeckSidebar({
     const cards: Card[] = [];
     const counts: Record<string, number> = {};
     
+    // 色の逆変換マップ
+    const colorRevMap: Record<string, string> = { 'R': '赤', 'B': '青', 'G': '緑', 'P': '紫', 'K': '黒', 'Y': '黄' };
+    
     const lines = encoded.split('\n').filter(l => l.startsWith('B|'));
-    lines.forEach(line => {
+    lines.forEach((line, lineIdx) => {
       const parts = line.split('|');
-      if (parts.length >= 10) {
-        const [, cardId, name, typeCode, colors, cost, power, counter, attr, count, features, text] = parts;
+      if (parts.length >= 9) {
+        const [, idx, name, typeCode, colors, cost, power, counter, count] = parts;
         const type = typeCode === 'C' ? 'CHARACTER' : typeCode === 'E' ? 'EVENT' : 'STAGE';
+        const cardId = `BLANK-${String(lineIdx + 1).padStart(4, '0')}`;
+        
+        // 色を復元
+        const colorArray = colors.split('').map(c => colorRevMap[c] || c).filter(Boolean);
         
         cards.push({
           name: name || '不明カード',
@@ -228,13 +237,13 @@ export default function DeckSidebar({
           type,
           rarity: '?',
           cost: parseInt(cost) || 0,
-          attribute: attr === '-' ? '' : attr,
-          power: parseInt(power) || 0,
-          counter: parseInt(counter) || 0,
-          color: colors ? colors.split(',') : [],
+          attribute: '',
+          power: (parseInt(power) || 0) * 1000,
+          counter: (parseInt(counter) || 0) * 1000,
+          color: colorArray,
           block_icon: '',
-          features: features ? features.split(',').filter(Boolean) : [],
-          text: text || '',
+          features: [],
+          text: '',
           trigger: '',
           source: 'ブランクカード（QRインポート）',
           image_url: '',
@@ -687,11 +696,25 @@ export default function DeckSidebar({
             {exportText && (
               <div className="mt-3">
                 <h5 className="font-medium text-xs mb-1">QRコード</h5>
-                <img
-                  src={`/api/qr?text=${encodeURIComponent(exportText)}&size=200`}
-                  alt="QR Code"
-                  className="w-full max-w-[200px] mx-auto"
-                />
+                {exportText.length > 2000 ? (
+                  <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                    ⚠️ データ量が多すぎるため、QRコードでの読み取りができない可能性があります。
+                    テキストをコピーまたは保存してご利用ください。
+                  </div>
+                ) : (
+                  <>
+                    <img
+                      src={`/api/qr?text=${encodeURIComponent(exportText)}&size=200`}
+                      alt="QR Code"
+                      className="w-full max-w-[200px] mx-auto"
+                    />
+                    {exportText.length > 1000 && (
+                      <p className="text-xs text-yellow-600 mt-1">
+                        ⚠️ データ量が多いため、読み取りに失敗する場合があります
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>

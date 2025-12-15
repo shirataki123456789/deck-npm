@@ -40,7 +40,7 @@ export default function BlankCardModal({
   const [cost, setCost] = useState<number>(0);
   const [power, setPower] = useState<number>(5000);
   const [counter, setCounter] = useState<number>(1000);
-  const [attribute, setAttribute] = useState<string>('');
+  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
   const [customFeature, setCustomFeature] = useState('');
   const [effectText, setEffectText] = useState('');
@@ -60,7 +60,8 @@ export default function BlankCardModal({
       setCost(editCard.cost >= 0 ? editCard.cost : 0);
       setPower(editCard.power);
       setCounter(editCard.counter);
-      setAttribute(editCard.attribute || '');
+      // 属性は/区切りで保存されている場合があるので分割
+      setSelectedAttributes(editCard.attribute ? editCard.attribute.split('/') : []);
       setSelectedFeatures(editCard.features || []);
       setEffectText(editCard.text || '');
       setTrigger(editCard.trigger || '');
@@ -79,7 +80,7 @@ export default function BlankCardModal({
     setCost(0);
     setPower(5000);
     setCounter(1000);
-    setAttribute('');
+    setSelectedAttributes([]);
     setSelectedFeatures([]);
     setCustomFeature('');
     setEffectText('');
@@ -124,7 +125,7 @@ export default function BlankCardModal({
       type: cardType,
       rarity: '?',
       cost: cardType === 'LEADER' ? -1 : cost,
-      attribute: attribute,
+      attribute: selectedAttributes.join('/'), // 複数選択は/区切りで保存
       power: power,
       counter: counter,
       color: selectedColors,
@@ -163,6 +164,14 @@ export default function BlankCardModal({
       prev.includes(color)
         ? prev.filter(c => c !== color)
         : [...prev, color]
+    );
+  };
+  
+  const toggleAttribute = (attr: string) => {
+    setSelectedAttributes(prev =>
+      prev.includes(attr)
+        ? prev.filter(a => a !== attr)
+        : [...prev, attr]
     );
   };
   
@@ -302,25 +311,15 @@ export default function BlankCardModal({
           {/* 属性 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              属性
+              属性（複数選択可）
             </label>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setAttribute('')}
-                className={`px-3 py-1.5 rounded border text-sm transition-colors ${
-                  attribute === ''
-                    ? 'bg-gray-600 text-white border-gray-600'
-                    : 'bg-white border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                なし
-              </button>
               {availableAttributes.map(attr => (
                 <button
                   key={attr}
-                  onClick={() => setAttribute(attr)}
+                  onClick={() => toggleAttribute(attr)}
                   className={`px-3 py-1.5 rounded border text-sm transition-colors ${
-                    attribute === attr
+                    selectedAttributes.includes(attr)
                       ? 'bg-purple-600 text-white border-purple-600'
                       : 'bg-white border-gray-300 hover:bg-gray-50'
                   }`}
@@ -329,6 +328,9 @@ export default function BlankCardModal({
                 </button>
               ))}
             </div>
+            {selectedAttributes.length > 0 && (
+              <p className="text-xs text-gray-500 mt-1">選択中: {selectedAttributes.join('/')}</p>
+            )}
           </div>
           
           {/* コスト・パワー・カウンター */}
@@ -497,11 +499,11 @@ export default function BlankCardModal({
                       {c}
                     </span>
                   ))}
-                  {attribute && (
-                    <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-xs">
-                      {attribute}
+                  {selectedAttributes.map(attr => (
+                    <span key={attr} className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-xs">
+                      {attr}
                     </span>
-                  )}
+                  ))}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
                   {cardType} / コスト{cost} / パワー{power} / C{counter > 0 ? `+${counter}` : 'なし'}
