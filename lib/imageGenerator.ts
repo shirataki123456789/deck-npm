@@ -101,11 +101,11 @@ function drawDeckName(
 /**
  * ブランクカードのプレースホルダーを描画（実際のカードレイアウトに準拠）
  * レイアウト:
- * - 左上: コスト（黄色丸）
+ * - 左上: コスト（カード色背景に白文字）
  * - 右上: パワー + 属性
- * - 左側: カウンター（縦）
- * - 中央: 効果テキスト
- * - 下部: トリガー → タイプ → カード名 → 特徴 → ID
+ * - 左側: カウンター（縦・効果エリアの左外）
+ * - 中央: 効果テキスト（改行対応）
+ * - 下部: トリガー → タイプ → カード名 → 特徴 → ID（カード色背景）
  */
 function drawBlankCardPlaceholder(
   ctx: CanvasRenderingContext2D,
@@ -118,6 +118,8 @@ function drawBlankCardPlaceholder(
   // 背景グラデーション（カードの色に基づく）
   const cardColors = card.color.map(c => COLOR_HEX[c] || '#888888');
   if (cardColors.length === 0) cardColors.push('#888888');
+  
+  const primaryColor = cardColors[0];
   
   const gradient = ctx.createLinearGradient(x, y, x + width, y + height);
   if (cardColors.length === 1) {
@@ -133,36 +135,42 @@ function drawBlankCardPlaceholder(
   ctx.fillStyle = gradient;
   ctx.fillRect(x, y, width, height);
   
-  // 半透明オーバーレイ（上部は薄く、中央は濃く）
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-  ctx.fillRect(x, y, width, height * 0.35);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.fillRect(x, y + height * 0.35, width, height * 0.35);
+  // 半透明オーバーレイ（イラストエリア風）
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+  ctx.fillRect(x, y + height * 0.08, width, height * 0.32);
   
-  // 下部バー（黄色系・タイプ表示エリア）
-  ctx.fillStyle = '#F7E731';
-  ctx.fillRect(x, y + height * 0.78, width, height * 0.22);
+  // 効果テキストエリア背景（少し暗く）
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(x + 20, y + height * 0.42, width - 24, height * 0.30);
+  
+  // 下部バー（カード色）
+  ctx.fillStyle = primaryColor;
+  ctx.fillRect(x, y + height * 0.75, width, height * 0.25);
+  
+  // 下部バーに半透明オーバーレイ
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.fillRect(x, y + height * 0.75, width, height * 0.25);
   
   // 枠線
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
   
-  // === 左上: コスト（黄色丸） ===
-  const costRadius = 14;
-  const costX = x + 18;
-  const costY = y + 20;
+  // === 左上: コスト（カード色背景に白文字） ===
+  const costRadius = 12;
+  const costX = x + 14;
+  const costY = y + 16;
   
   ctx.beginPath();
   ctx.arc(costX, costY, costRadius, 0, Math.PI * 2);
-  ctx.fillStyle = '#F7E731';
+  ctx.fillStyle = primaryColor;
   ctx.fill();
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = 2;
   ctx.stroke();
   
-  ctx.fillStyle = '#000';
-  ctx.font = 'bold 18px sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(String(card.cost >= 0 ? card.cost : '-'), costX, costY);
@@ -173,67 +181,76 @@ function drawBlankCardPlaceholder(
   
   // パワー
   ctx.fillStyle = 'white';
-  ctx.font = 'bold 14px sans-serif';
+  ctx.font = 'bold 12px sans-serif';
   const powerText = card.power > 0 ? String(card.power) : '-';
-  ctx.fillText(powerText, x + width - 8, y + 8);
+  ctx.fillText(powerText, x + width - 6, y + 6);
   
   // 属性（パワーの下）
   if (card.attribute) {
-    ctx.font = 'bold 12px sans-serif';
+    ctx.font = 'bold 10px sans-serif';
     ctx.fillStyle = 'white';
-    ctx.fillText(card.attribute, x + width - 8, y + 24);
+    ctx.fillText(card.attribute, x + width - 6, y + 20);
   }
   
-  // === 左側: カウンター（縦書き風） ===
+  // === 左側: カウンター（効果エリアの左外に縦書き） ===
   if (card.counter > 0) {
     ctx.save();
-    ctx.translate(x + 12, y + height * 0.45);
+    ctx.translate(x + 10, y + height * 0.57);
     ctx.rotate(-Math.PI / 2);
     ctx.fillStyle = 'white';
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 9px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`+${card.counter}`, 0, 0);
     ctx.restore();
   }
   
-  // === 中央: 効果テキスト ===
+  // === 中央: 効果テキスト（改行対応） ===
   if (card.text) {
     ctx.fillStyle = 'white';
-    ctx.font = '8px sans-serif';
+    ctx.font = '7px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     
-    const textX = x + 8;
-    const textY = y + height * 0.40;
-    const maxWidth = width - 16;
-    const lineHeight = 10;
-    const maxLines = 4;
+    const textX = x + 22;
+    const textY = y + height * 0.44;
+    const maxWidth = width - 28;
+    const lineHeight = 9;
+    const maxLines = 5;
     
-    // テキストを折り返し
-    const words = card.text.split('');
-    let line = '';
-    let lines: string[] = [];
+    // 改行で分割し、各行を幅に合わせて折り返し
+    const paragraphs = card.text.split('\n');
+    const allLines: string[] = [];
     
-    for (const char of words) {
-      const testLine = line + char;
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > maxWidth && line !== '') {
-        lines.push(line);
-        line = char;
-        if (lines.length >= maxLines) break;
-      } else {
-        line = testLine;
+    for (const paragraph of paragraphs) {
+      if (allLines.length >= maxLines) break;
+      
+      let line = '';
+      for (const char of paragraph) {
+        const testLine = line + char;
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && line !== '') {
+          allLines.push(line);
+          line = char;
+          if (allLines.length >= maxLines) break;
+        } else {
+          line = testLine;
+        }
+      }
+      if (line && allLines.length < maxLines) {
+        allLines.push(line);
       }
     }
-    if (line && lines.length < maxLines) {
-      lines.push(line);
-    }
-    if (lines.length === maxLines && line.length > 0) {
-      lines[maxLines - 1] = lines[maxLines - 1].slice(0, -3) + '...';
+    
+    // 最終行が途中で切れた場合
+    if (allLines.length === maxLines) {
+      const lastLine = allLines[maxLines - 1];
+      if (lastLine.length > 0) {
+        allLines[maxLines - 1] = lastLine.slice(0, -2) + '…';
+      }
     }
     
-    lines.forEach((l, i) => {
+    allLines.forEach((l, i) => {
       ctx.fillText(l, textX, textY + i * lineHeight);
     });
   }
@@ -241,49 +258,53 @@ function drawBlankCardPlaceholder(
   // === トリガー（効果テキストの下） ===
   if (card.trigger) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.font = '7px sans-serif';
+    ctx.font = '6px sans-serif';
     ctx.textAlign = 'left';
-    const triggerText = `トリガー ${card.trigger.slice(0, 15)}`;
-    ctx.fillText(triggerText, x + 6, y + height * 0.72);
+    ctx.textBaseline = 'top';
+    const triggerText = `【トリガー】${card.trigger.slice(0, 20)}`;
+    ctx.fillText(triggerText, x + 22, y + height * 0.70);
   }
   
-  // === 下部黄色バー内 ===
-  ctx.fillStyle = '#000';
+  // === 下部バー内（カード色背景に白文字） ===
+  ctx.fillStyle = 'white';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
   // タイプ
-  ctx.font = '8px sans-serif';
+  ctx.font = '7px sans-serif';
   const typeText = card.type === 'CHARACTER' ? 'CHARACTER' : card.type === 'EVENT' ? 'EVENT' : 'STAGE';
-  ctx.fillText(typeText, x + width / 2, y + height * 0.81);
+  ctx.fillText(typeText, x + width / 2, y + height * 0.79);
   
   // カード名
-  ctx.font = 'bold 11px sans-serif';
-  const name = card.name.length > 12 ? card.name.slice(0, 12) + '...' : card.name;
-  ctx.fillText(name, x + width / 2, y + height * 0.875);
+  ctx.font = 'bold 10px sans-serif';
+  const name = card.name.length > 14 ? card.name.slice(0, 14) + '…' : card.name;
+  ctx.fillText(name, x + width / 2, y + height * 0.86);
   
-  // 特徴
+  // 特徴（全て表示、複数行対応）
   if (card.features.length > 0) {
-    ctx.font = '7px sans-serif';
-    const featuresText = card.features.slice(0, 2).join('/');
-    const displayFeatures = featuresText.length > 18 ? featuresText.slice(0, 18) + '...' : featuresText;
-    ctx.fillText(displayFeatures, x + width / 2, y + height * 0.93);
+    ctx.font = '6px sans-serif';
+    const featuresText = card.features.join(' / ');
+    
+    // 幅に収まるか確認
+    const maxFeaturesWidth = width - 10;
+    const metrics = ctx.measureText(featuresText);
+    
+    if (metrics.width <= maxFeaturesWidth) {
+      ctx.fillText(featuresText, x + width / 2, y + height * 0.92);
+    } else {
+      // 2行に分割
+      const midPoint = Math.ceil(card.features.length / 2);
+      const line1 = card.features.slice(0, midPoint).join(' / ');
+      const line2 = card.features.slice(midPoint).join(' / ');
+      ctx.fillText(line1, x + width / 2, y + height * 0.90);
+      ctx.fillText(line2, x + width / 2, y + height * 0.95);
+    }
   }
   
   // カードID（左下）
-  ctx.font = '6px sans-serif';
+  ctx.font = '5px sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText(card.card_id, x + 4, y + height * 0.97);
-  
-  // 「仮」マーク（右下）
-  ctx.fillStyle = 'rgba(128, 0, 255, 0.9)';
-  const badgeW = 18;
-  const badgeH = 12;
-  ctx.fillRect(x + width - badgeW - 3, y + height * 0.78 - badgeH - 2, badgeW, badgeH);
-  ctx.fillStyle = 'white';
-  ctx.font = 'bold 8px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('仮', x + width - badgeW / 2 - 3, y + height * 0.78 - badgeH / 2 - 2);
+  ctx.fillText(card.card_id, x + 3, y + height * 0.98);
 }
 
 export interface DeckImageCard {
