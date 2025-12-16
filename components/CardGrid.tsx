@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Card, UNLIMITED_CARDS, COLOR_HEX } from '@/lib/types';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Card, UNLIMITED_CARDS } from '@/lib/types';
 import ImageModal from './ImageModal';
 import { drawBlankCardPlaceholder } from '@/lib/imageGenerator';
 
@@ -10,7 +10,7 @@ interface CardGridProps {
   colsCount?: number;
   onCardClick?: (card: Card) => void;
   onCardRemove?: (card: Card) => void;
-  onCardReset?: (card: Card) => void; // 枚数を0にリセット
+  onCardReset?: (card: Card) => void;
   showAddButton?: boolean;
   getCardCount?: (cardId: string) => number;
   canAddCard?: (cardId: string) => boolean;
@@ -58,12 +58,12 @@ export default function CardGrid({
   );
 }
 
-// ブランクカードをCanvasで描画するコンポーネント
+// ブランクカードをCanvasで描画するコンポーネント（リサイズ対応）
 function BlankCardCanvas({ card }: { card: Card }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  useEffect(() => {
+  const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
@@ -71,11 +71,11 @@ function BlankCardCanvas({ card }: { card: Card }) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // コンテナのサイズを取得
     const containerWidth = container.offsetWidth;
+    if (containerWidth === 0) return; // まだマウントされていない
+    
     const containerHeight = Math.round(containerWidth * (560 / 400));
     
-    // Canvasのサイズを設定（高解像度対応）
     const scale = window.devicePixelRatio || 1;
     canvas.width = containerWidth * scale;
     canvas.height = containerHeight * scale;
@@ -83,10 +83,22 @@ function BlankCardCanvas({ card }: { card: Card }) {
     canvas.style.height = `${containerHeight}px`;
     
     ctx.scale(scale, scale);
-    
-    // ブランクカードを描画
     drawBlankCardPlaceholder(ctx, card, 0, 0, containerWidth, containerHeight);
   }, [card]);
+  
+  useEffect(() => {
+    // 初回描画（少し遅延させてコンテナサイズが確定してから）
+    const timer = setTimeout(drawCanvas, 10);
+    
+    // リサイズ時に再描画
+    const handleResize = () => drawCanvas();
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [drawCanvas]);
   
   return (
     <div ref={containerRef} className="w-full aspect-[400/560]">
@@ -119,26 +131,20 @@ function CardItem({
   colsCount,
 }: CardItemProps) {
   const isUnlimited = UNLIMITED_CARDS.includes(card.card_id);
-  const maxCount = isUnlimited ? 99 : 4; // 無制限カードは99として扱う
+  const maxCount = isUnlimited ? 99 : 4;
   const maxCountDisplay = isUnlimited ? '∞' : '4';
   
-  // 列数が多い場合はコンパクト表示
   const isCompact = colsCount >= 5;
-  
-  // ブランクカードかどうか
   const isBlankCard = !card.image_url && card.card_id.startsWith('BLANK-');
   
-  // 画像クリック時の処理
   const handleImageClick = () => {
     if (!showAddButton) return;
     
     const currentCount = count || 0;
     
-    // 最大枚数に達している場合は0にリセット
     if (!isUnlimited && currentCount >= maxCount) {
       onReset?.(card);
     } else {
-      // それ以外は追加
       onAdd?.(card);
     }
   };
@@ -150,7 +156,6 @@ function CardItem({
         className="relative cursor-pointer active:opacity-80"
         onClick={handleImageClick}
       >
-        {/* カード画像またはプレースホルダー */}
         {card.image_url ? (
           <img
             src={card.image_url}
@@ -173,8 +178,8 @@ function CardItem({
           </div>
         )}
         
-        {/* 拡大ボタン（画像がある場合のみ） */}
-        {card.image_url && (
+        {/* 拡大ボタン（画像またはブランクカード） */}
+        {(card.image_url || isBlankCard) && (
           <button
             onClick={(e) => { e.stopPropagation(); onZoom?.(); }}
             className={`absolute bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition-opacity ${
@@ -196,7 +201,7 @@ function CardItem({
           </div>
         )}
         
-        {/* カード枚数（デッキモード時） */}
+        {/* カード枚数 */}
         {showAddButton && typeof count === 'number' && (
           <div className={`absolute top-0.5 right-0.5 text-white rounded-full font-bold ${
             count > 0 ? (count >= maxCount && !isUnlimited ? 'bg-orange-500' : 'bg-blue-600') : 'bg-gray-400'
@@ -206,7 +211,7 @@ function CardItem({
         )}
       </div>
       
-      {/* カード情報（コンパクト時は非表示、ブランクカードは常に非表示） */}
+      {/* カード情報（ブランクカードは非表示） */}
       {!isCompact && !isBlankCard && (
         <div className="p-1.5 sm:p-2">
           <div className="text-xs sm:text-sm font-medium truncate" title={card.name}>
@@ -217,7 +222,6 @@ function CardItem({
             {card.cost >= 0 && <span>コスト:{card.cost}</span>}
           </div>
           
-          {/* 色バッジ */}
           <div className="flex gap-0.5 sm:gap-1 mt-1">
             {card.color.map(c => (
               <span key={c} className={`color-badge color-badge-${c} text-[10px] sm:text-xs px-1 sm:px-2`}>
@@ -226,7 +230,6 @@ function CardItem({
             ))}
           </div>
           
-          {/* ±ボタン（デッキモード時） */}
           {showAddButton && (
             <div className="flex gap-1 mt-1.5 sm:mt-2">
               <button
@@ -256,7 +259,7 @@ function CardItem({
         </div>
       )}
       
-      {/* ブランクカード用の±ボタン（カード情報は表示しない） */}
+      {/* ブランクカード用の±ボタン */}
       {!isCompact && isBlankCard && showAddButton && (
         <div className="p-1.5 sm:p-2">
           <div className="flex gap-1">
@@ -286,7 +289,7 @@ function CardItem({
         </div>
       )}
       
-      {/* コンパクト時の±ボタン（画像下に小さく） */}
+      {/* コンパクト時の±ボタン */}
       {isCompact && showAddButton && (
         <div className="flex">
           <button

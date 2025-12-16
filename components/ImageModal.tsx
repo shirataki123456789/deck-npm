@@ -1,11 +1,53 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Card } from '@/lib/types';
+import { drawBlankCardPlaceholder } from '@/lib/imageGenerator';
 
 interface ImageModalProps {
   card: Card | null;
   onClose: () => void;
+}
+
+// ブランクカードをCanvasで描画（モーダル用大きめサイズ）
+function BlankCardCanvasLarge({ card }: { card: Card }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  const drawCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const containerWidth = container.offsetWidth;
+    const containerHeight = Math.round(containerWidth * (560 / 400));
+    
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = containerWidth * scale;
+    canvas.height = containerHeight * scale;
+    canvas.style.width = `${containerWidth}px`;
+    canvas.style.height = `${containerHeight}px`;
+    
+    ctx.scale(scale, scale);
+    drawBlankCardPlaceholder(ctx, card, 0, 0, containerWidth, containerHeight);
+  }, [card]);
+  
+  useEffect(() => {
+    drawCanvas();
+    
+    const handleResize = () => drawCanvas();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [drawCanvas]);
+  
+  return (
+    <div ref={containerRef} className="w-full aspect-[400/560]">
+      <canvas ref={canvasRef} className="w-full h-full rounded-lg shadow-2xl" />
+    </div>
+  );
 }
 
 export default function ImageModal({ card, onClose }: ImageModalProps) {
@@ -19,7 +61,6 @@ export default function ImageModal({ card, onClose }: ImageModalProps) {
     
     if (card) {
       document.addEventListener('keydown', handleKeyDown);
-      // スクロールを無効化
       document.body.style.overflow = 'hidden';
     }
     
@@ -30,6 +71,8 @@ export default function ImageModal({ card, onClose }: ImageModalProps) {
   }, [card, onClose]);
   
   if (!card) return null;
+  
+  const isBlankCard = !card.image_url && card.card_id.startsWith('BLANK-');
   
   return (
     <div 
@@ -56,12 +99,20 @@ export default function ImageModal({ card, onClose }: ImageModalProps) {
           className="relative max-w-lg w-full"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* カード画像 */}
-          <img
-            src={card.image_url}
-            alt={card.name}
-            className="w-full rounded-lg shadow-2xl"
-          />
+          {/* カード画像またはブランクカード */}
+          {isBlankCard ? (
+            <BlankCardCanvasLarge card={card} />
+          ) : card.image_url ? (
+            <img
+              src={card.image_url}
+              alt={card.name}
+              className="w-full rounded-lg shadow-2xl"
+            />
+          ) : (
+            <div className="w-full aspect-[400/560] bg-gray-400 rounded-lg flex items-center justify-center">
+              <span className="text-6xl text-gray-600">?</span>
+            </div>
+          )}
           
           {/* カード情報 */}
           <div className="bg-white rounded-lg mt-3 p-3 shadow-lg">
@@ -70,12 +121,17 @@ export default function ImageModal({ card, onClose }: ImageModalProps) {
                 <h3 className="font-bold text-lg">{card.name}</h3>
                 <p className="text-gray-600 text-sm">{card.card_id}</p>
               </div>
-              <div className="flex gap-1 flex-shrink-0">
+              <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
                 {card.color.map(c => (
                   <span key={c} className={`color-badge color-badge-${c}`}>
                     {c}
                   </span>
                 ))}
+                {card.attribute && (
+                  <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">
+                    {card.attribute}
+                  </span>
+                )}
               </div>
             </div>
             
@@ -83,7 +139,7 @@ export default function ImageModal({ card, onClose }: ImageModalProps) {
               <span>タイプ: {card.type}</span>
               {card.cost >= 0 && <span>コスト: {card.cost}</span>}
               {card.power > 0 && <span>パワー: {card.power}</span>}
-              {card.counter >= 0 && <span>カウンター: +{card.counter}</span>}
+              {card.counter > 0 && <span>カウンター: +{card.counter}</span>}
             </div>
             
             {card.features.length > 0 && (
@@ -94,7 +150,7 @@ export default function ImageModal({ card, onClose }: ImageModalProps) {
             )}
             
             {card.text && (
-              <div className="mt-2 text-sm bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">
+              <div className="mt-2 text-sm bg-gray-50 p-2 rounded max-h-32 overflow-y-auto whitespace-pre-wrap">
                 {card.text}
               </div>
             )}
