@@ -1,8 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, UNLIMITED_CARDS } from '@/lib/types';
+import { Card, UNLIMITED_CARDS, COLOR_HEX } from '@/lib/types';
 import ImageModal from './ImageModal';
+
+// 色の明度を判定
+function isLightColor(hexColor: string): boolean {
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5;
+}
 
 interface CardGridProps {
   cards: Card[];
@@ -57,6 +67,128 @@ export default function CardGrid({
   );
 }
 
+// ブランクカードのプレースホルダー表示（デッキ画像と同じスタイル）
+function BlankCardPlaceholder({ card, isCompact }: { card: Card; isCompact: boolean }) {
+  const cardColors = card.color.map(c => COLOR_HEX[c] || '#888888');
+  if (cardColors.length === 0) cardColors.push('#888888');
+  
+  const primaryColor = cardColors[0];
+  const isLight = isLightColor(primaryColor);
+  const textColor = isLight ? 'text-black' : 'text-white';
+  const borderColor = isLight ? 'border-gray-600' : 'border-white';
+  
+  // グラデーション背景
+  const bgStyle = cardColors.length === 1
+    ? { backgroundColor: primaryColor }
+    : { background: `linear-gradient(135deg, ${cardColors.join(', ')})` };
+  
+  return (
+    <div 
+      className={`w-full aspect-[400/560] relative overflow-hidden ${borderColor} border-2`}
+      style={bgStyle}
+    >
+      {/* 上部エリア（イラスト風） */}
+      <div className="absolute top-[8%] left-0 right-0 h-[32%] bg-white bg-opacity-15" />
+      
+      {/* 効果テキストエリア */}
+      <div className="absolute top-[42%] left-[8%] right-[4%] h-[28%] bg-black bg-opacity-40 rounded-sm" />
+      
+      {/* 下部バー */}
+      <div 
+        className="absolute bottom-0 left-0 right-0 h-[25%]"
+        style={{ backgroundColor: primaryColor }}
+      >
+        <div className={`absolute inset-0 ${isLight ? 'bg-black bg-opacity-5' : 'bg-white bg-opacity-10'}`} />
+      </div>
+      
+      {/* コスト（左上） */}
+      <div 
+        className={`absolute top-[4%] left-[6%] w-[20%] aspect-square rounded-full flex items-center justify-center font-bold border-2 ${borderColor} ${textColor}`}
+        style={{ backgroundColor: primaryColor, fontSize: isCompact ? '12px' : '16px' }}
+      >
+        {card.cost >= 0 ? card.cost : '-'}
+      </div>
+      
+      {/* パワー・属性（右上） */}
+      <div className={`absolute top-[3%] right-[4%] text-right ${textColor}`}>
+        <div className="font-bold" style={{ fontSize: isCompact ? '10px' : '13px' }}>
+          {card.power > 0 ? card.power : '-'}
+        </div>
+        {card.attribute && (
+          <div className="font-bold" style={{ fontSize: isCompact ? '8px' : '11px' }}>
+            {card.attribute}
+          </div>
+        )}
+      </div>
+      
+      {/* カウンター（左側縦書き） */}
+      {card.counter > 0 && (
+        <div 
+          className={`absolute left-[2%] top-[50%] -translate-y-1/2 ${textColor} font-bold`}
+          style={{ 
+            writingMode: 'vertical-rl',
+            textOrientation: 'mixed',
+            fontSize: isCompact ? '8px' : '10px'
+          }}
+        >
+          +{card.counter}
+        </div>
+      )}
+      
+      {/* 効果テキスト */}
+      {card.text && (
+        <div 
+          className="absolute top-[44%] left-[10%] right-[6%] text-white overflow-hidden"
+          style={{ 
+            fontSize: isCompact ? '6px' : '8px',
+            lineHeight: isCompact ? '1.2' : '1.3',
+            maxHeight: isCompact ? '20%' : '24%'
+          }}
+        >
+          {card.text.split('\n').slice(0, isCompact ? 2 : 3).map((line, i) => (
+            <div key={i} className="truncate">{line}</div>
+          ))}
+        </div>
+      )}
+      
+      {/* トリガー */}
+      {card.trigger && (
+        <div 
+          className="absolute text-white text-opacity-90 truncate left-[10%] right-[6%]"
+          style={{ 
+            top: isCompact ? '68%' : '70%',
+            fontSize: isCompact ? '5px' : '7px'
+          }}
+        >
+          【トリガー】{card.trigger.slice(0, 12)}
+        </div>
+      )}
+      
+      {/* 下部バー内容 */}
+      <div className={`absolute bottom-0 left-0 right-0 h-[25%] flex flex-col items-center justify-center ${textColor}`}>
+        {/* タイプ */}
+        <div style={{ fontSize: isCompact ? '5px' : '7px' }}>
+          {card.type}
+        </div>
+        {/* カード名 */}
+        <div className="font-bold truncate max-w-[90%]" style={{ fontSize: isCompact ? '8px' : '11px' }}>
+          {card.name}
+        </div>
+        {/* 特徴 */}
+        {card.features.length > 0 && (
+          <div className="truncate max-w-[95%]" style={{ fontSize: isCompact ? '4px' : '6px' }}>
+            {card.features.join(' / ')}
+          </div>
+        )}
+        {/* カードID */}
+        <div className="absolute bottom-[2%] left-[3%]" style={{ fontSize: isCompact ? '4px' : '5px' }}>
+          {card.card_id}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface CardItemProps {
   card: Card;
   onAdd?: (card: Card) => void;
@@ -86,6 +218,9 @@ function CardItem({
   
   // 列数が多い場合はコンパクト表示
   const isCompact = colsCount >= 5;
+  
+  // ブランクカードかどうか
+  const isBlankCard = !card.image_url && card.card_id.startsWith('BLANK-');
   
   // 画像クリック時の処理
   const handleImageClick = () => {
@@ -118,6 +253,8 @@ function CardItem({
             loading="lazy"
             decoding="async"
           />
+        ) : isBlankCard ? (
+          <BlankCardPlaceholder card={card} isCompact={isCompact} />
         ) : (
           <div className="w-full aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 flex flex-col items-center justify-center text-gray-600">
             <span className={isCompact ? 'text-2xl' : 'text-4xl'}>?</span>
@@ -127,15 +264,6 @@ function CardItem({
                 <span className="text-[10px] mt-0.5">{card.card_id}</span>
               </>
             )}
-          </div>
-        )}
-        
-        {/* ブランクカードマーク */}
-        {!card.image_url && (
-          <div className={`absolute bg-purple-600 text-white font-bold rounded ${
-            isCompact ? 'top-0.5 left-0.5 text-[8px] px-0.5' : 'top-1 left-1 text-xs px-1 py-0.5'
-          }`}>
-            {isCompact ? 'B' : '📝仮'}
           </div>
         )}
         
@@ -180,7 +308,7 @@ function CardItem({
           </div>
           <div className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 sm:gap-2">
             <span>{card.card_id}</span>
-            {card.cost > 0 && <span>コスト:{card.cost}</span>}
+            {card.cost >= 0 && <span>コスト:{card.cost}</span>}
           </div>
           
           {/* 色バッジ */}
