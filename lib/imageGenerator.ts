@@ -99,9 +99,22 @@ function drawDeckName(
 }
 
 /**
+ * 色の明度を計算して、明るい色かどうかを判定
+ */
+function isLightColor(hexColor: string): boolean {
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  // 相対輝度を計算（人間の目の感度を考慮）
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5;
+}
+
+/**
  * ブランクカードのプレースホルダーを描画（実際のカードレイアウトに準拠）
  * レイアウト:
- * - 左上: コスト（カード色背景に白文字）
+ * - 左上: コスト（カード色背景）
  * - 右上: パワー + 属性
  * - 左側: カウンター（縦・効果エリアの左外）
  * - 中央: 効果テキスト（改行対応）
@@ -120,6 +133,11 @@ function drawBlankCardPlaceholder(
   if (cardColors.length === 0) cardColors.push('#888888');
   
   const primaryColor = cardColors[0];
+  
+  // 明るい色（黄色など）かどうかを判定
+  const isLight = isLightColor(primaryColor);
+  const textOnColor = isLight ? '#000000' : '#FFFFFF'; // 明るい色なら黒文字、暗い色なら白文字
+  const strokeOnColor = isLight ? '#333333' : '#FFFFFF';
   
   const gradient = ctx.createLinearGradient(x, y, x + width, y + height);
   if (cardColors.length === 1) {
@@ -147,16 +165,16 @@ function drawBlankCardPlaceholder(
   ctx.fillStyle = primaryColor;
   ctx.fillRect(x, y + height * 0.75, width, height * 0.25);
   
-  // 下部バーに半透明オーバーレイ
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+  // 下部バーに半透明オーバーレイ（明るい色の場合は暗く、暗い色の場合は明るく）
+  ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.1)';
   ctx.fillRect(x, y + height * 0.75, width, height * 0.25);
   
   // 枠線
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.strokeStyle = strokeOnColor;
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
   
-  // === 左上: コスト（カード色背景に白文字） ===
+  // === 左上: コスト（カード色背景） ===
   const costRadius = 12;
   const costX = x + 14;
   const costY = y + 16;
@@ -165,11 +183,11 @@ function drawBlankCardPlaceholder(
   ctx.arc(costX, costY, costRadius, 0, Math.PI * 2);
   ctx.fillStyle = primaryColor;
   ctx.fill();
-  ctx.strokeStyle = 'white';
+  ctx.strokeStyle = strokeOnColor;
   ctx.lineWidth = 2;
   ctx.stroke();
   
-  ctx.fillStyle = 'white';
+  ctx.fillStyle = textOnColor;
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -265,8 +283,8 @@ function drawBlankCardPlaceholder(
     ctx.fillText(triggerText, x + 22, y + height * 0.70);
   }
   
-  // === 下部バー内（カード色背景に白文字） ===
-  ctx.fillStyle = 'white';
+  // === 下部バー内（カード色に応じた文字色） ===
+  ctx.fillStyle = textOnColor;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
