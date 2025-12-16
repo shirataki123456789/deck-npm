@@ -198,16 +198,16 @@ function drawBlankCardPlaceholder(
   ctx.textBaseline = 'top';
   
   // パワー
-  ctx.fillStyle = 'white';
-  ctx.font = 'bold 12px sans-serif';
+  ctx.fillStyle = textOnColor;
+  ctx.font = 'bold 14px sans-serif';
   const powerText = card.power > 0 ? String(card.power) : '-';
-  ctx.fillText(powerText, x + width - 6, y + 6);
+  ctx.fillText(powerText, x + width - 5, y + 5);
   
   // 属性（パワーの下）
   if (card.attribute) {
-    ctx.font = 'bold 10px sans-serif';
-    ctx.fillStyle = 'white';
-    ctx.fillText(card.attribute, x + width - 6, y + 20);
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillStyle = textOnColor;
+    ctx.fillText(card.attribute, x + width - 5, y + 21);
   }
   
   // === 左側: カウンター（効果エリアの左外に縦書き） ===
@@ -215,8 +215,8 @@ function drawBlankCardPlaceholder(
     ctx.save();
     ctx.translate(x + 10, y + height * 0.57);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillStyle = 'white';
-    ctx.font = 'bold 9px sans-serif';
+    ctx.fillStyle = textOnColor;
+    ctx.font = 'bold 10px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`+${card.counter}`, 0, 0);
@@ -226,15 +226,15 @@ function drawBlankCardPlaceholder(
   // === 中央: 効果テキスト（改行対応） ===
   if (card.text) {
     ctx.fillStyle = 'white';
-    ctx.font = '7px sans-serif';
+    ctx.font = '8px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     
     const textX = x + 22;
     const textY = y + height * 0.44;
     const maxWidth = width - 28;
-    const lineHeight = 9;
-    const maxLines = 5;
+    const lineHeight = 10;
+    const maxLines = 4;
     
     // 改行で分割し、各行を幅に合わせて折り返し
     const paragraphs = card.text.split('\n');
@@ -276,10 +276,10 @@ function drawBlankCardPlaceholder(
   // === トリガー（効果テキストの下） ===
   if (card.trigger) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.font = '6px sans-serif';
+    ctx.font = '7px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    const triggerText = `【トリガー】${card.trigger.slice(0, 20)}`;
+    const triggerText = `【トリガー】${card.trigger.slice(0, 18)}`;
     ctx.fillText(triggerText, x + 22, y + height * 0.70);
   }
   
@@ -324,6 +324,9 @@ function drawBlankCardPlaceholder(
   ctx.textAlign = 'left';
   ctx.fillText(card.card_id, x + 3, y + height * 0.98);
 }
+
+// ブランクカード描画関数をエクスポート（CardGrid等で使用）
+export { drawBlankCardPlaceholder, isLightColor };
 
 export interface DeckImageCard {
   url: string;
