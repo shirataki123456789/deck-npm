@@ -1,18 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, UNLIMITED_CARDS, COLOR_HEX } from '@/lib/types';
 import ImageModal from './ImageModal';
-
-// 色の明度を判定
-function isLightColor(hexColor: string): boolean {
-  const hex = hexColor.replace('#', '');
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.5;
-}
+import { drawBlankCardPlaceholder } from '@/lib/imageGenerator';
 
 interface CardGridProps {
   cards: Card[];
@@ -67,124 +58,39 @@ export default function CardGrid({
   );
 }
 
-// ブランクカードのプレースホルダー表示（デッキ画像と同じスタイル）
-function BlankCardPlaceholder({ card, isCompact }: { card: Card; isCompact: boolean }) {
-  const cardColors = card.color.map(c => COLOR_HEX[c] || '#888888');
-  if (cardColors.length === 0) cardColors.push('#888888');
+// ブランクカードをCanvasで描画するコンポーネント
+function BlankCardCanvas({ card }: { card: Card }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   
-  const primaryColor = cardColors[0];
-  const isLight = isLightColor(primaryColor);
-  const textColor = isLight ? 'text-black' : 'text-white';
-  const borderColor = isLight ? 'border-gray-600' : 'border-white';
-  
-  // グラデーション背景
-  const bgStyle = cardColors.length === 1
-    ? { backgroundColor: primaryColor }
-    : { background: `linear-gradient(135deg, ${cardColors.join(', ')})` };
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // コンテナのサイズを取得
+    const containerWidth = container.offsetWidth;
+    const containerHeight = Math.round(containerWidth * (560 / 400));
+    
+    // Canvasのサイズを設定（高解像度対応）
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = containerWidth * scale;
+    canvas.height = containerHeight * scale;
+    canvas.style.width = `${containerWidth}px`;
+    canvas.style.height = `${containerHeight}px`;
+    
+    ctx.scale(scale, scale);
+    
+    // ブランクカードを描画
+    drawBlankCardPlaceholder(ctx, card, 0, 0, containerWidth, containerHeight);
+  }, [card]);
   
   return (
-    <div 
-      className={`w-full aspect-[400/560] relative overflow-hidden ${borderColor} border-2`}
-      style={bgStyle}
-    >
-      {/* 上部エリア（イラスト風） */}
-      <div className="absolute top-[8%] left-0 right-0 h-[32%] bg-white bg-opacity-15" />
-      
-      {/* 効果テキストエリア */}
-      <div className="absolute top-[42%] left-[8%] right-[4%] h-[28%] bg-black bg-opacity-40 rounded-sm" />
-      
-      {/* 下部バー */}
-      <div 
-        className="absolute bottom-0 left-0 right-0 h-[25%]"
-        style={{ backgroundColor: primaryColor }}
-      >
-        <div className={`absolute inset-0 ${isLight ? 'bg-black bg-opacity-5' : 'bg-white bg-opacity-10'}`} />
-      </div>
-      
-      {/* コスト（左上） */}
-      <div 
-        className={`absolute top-[4%] left-[6%] w-[20%] aspect-square rounded-full flex items-center justify-center font-bold border-2 ${borderColor} ${textColor}`}
-        style={{ backgroundColor: primaryColor, fontSize: isCompact ? '12px' : '16px' }}
-      >
-        {card.cost >= 0 ? card.cost : '-'}
-      </div>
-      
-      {/* パワー・属性（右上） */}
-      <div className={`absolute top-[3%] right-[4%] text-right ${textColor}`}>
-        <div className="font-bold" style={{ fontSize: isCompact ? '10px' : '13px' }}>
-          {card.power > 0 ? card.power : '-'}
-        </div>
-        {card.attribute && (
-          <div className="font-bold" style={{ fontSize: isCompact ? '8px' : '11px' }}>
-            {card.attribute}
-          </div>
-        )}
-      </div>
-      
-      {/* カウンター（左側縦書き） */}
-      {card.counter > 0 && (
-        <div 
-          className={`absolute left-[2%] top-[50%] -translate-y-1/2 ${textColor} font-bold`}
-          style={{ 
-            writingMode: 'vertical-rl',
-            textOrientation: 'mixed',
-            fontSize: isCompact ? '8px' : '10px'
-          }}
-        >
-          +{card.counter}
-        </div>
-      )}
-      
-      {/* 効果テキスト */}
-      {card.text && (
-        <div 
-          className="absolute top-[44%] left-[10%] right-[6%] text-white overflow-hidden"
-          style={{ 
-            fontSize: isCompact ? '6px' : '8px',
-            lineHeight: isCompact ? '1.2' : '1.3',
-            maxHeight: isCompact ? '20%' : '24%'
-          }}
-        >
-          {card.text.split('\n').slice(0, isCompact ? 2 : 3).map((line, i) => (
-            <div key={i} className="truncate">{line}</div>
-          ))}
-        </div>
-      )}
-      
-      {/* トリガー */}
-      {card.trigger && (
-        <div 
-          className="absolute text-white text-opacity-90 truncate left-[10%] right-[6%]"
-          style={{ 
-            top: isCompact ? '68%' : '70%',
-            fontSize: isCompact ? '5px' : '7px'
-          }}
-        >
-          【トリガー】{card.trigger.slice(0, 12)}
-        </div>
-      )}
-      
-      {/* 下部バー内容 */}
-      <div className={`absolute bottom-0 left-0 right-0 h-[25%] flex flex-col items-center justify-center ${textColor}`}>
-        {/* タイプ */}
-        <div style={{ fontSize: isCompact ? '5px' : '7px' }}>
-          {card.type}
-        </div>
-        {/* カード名 */}
-        <div className="font-bold truncate max-w-[90%]" style={{ fontSize: isCompact ? '8px' : '11px' }}>
-          {card.name}
-        </div>
-        {/* 特徴 */}
-        {card.features.length > 0 && (
-          <div className="truncate max-w-[95%]" style={{ fontSize: isCompact ? '4px' : '6px' }}>
-            {card.features.join(' / ')}
-          </div>
-        )}
-        {/* カードID */}
-        <div className="absolute bottom-[2%] left-[3%]" style={{ fontSize: isCompact ? '4px' : '5px' }}>
-          {card.card_id}
-        </div>
-      </div>
+    <div ref={containerRef} className="w-full aspect-[400/560]">
+      <canvas ref={canvasRef} className="w-full h-full" />
     </div>
   );
 }
@@ -254,7 +160,7 @@ function CardItem({
             decoding="async"
           />
         ) : isBlankCard ? (
-          <BlankCardPlaceholder card={card} isCompact={isCompact} />
+          <BlankCardCanvas card={card} />
         ) : (
           <div className="w-full aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 flex flex-col items-center justify-center text-gray-600">
             <span className={isCompact ? 'text-2xl' : 'text-4xl'}>?</span>
@@ -300,8 +206,8 @@ function CardItem({
         )}
       </div>
       
-      {/* カード情報（コンパクト時は非表示） */}
-      {!isCompact && (
+      {/* カード情報（コンパクト時は非表示、ブランクカードは常に非表示） */}
+      {!isCompact && !isBlankCard && (
         <div className="p-1.5 sm:p-2">
           <div className="text-xs sm:text-sm font-medium truncate" title={card.name}>
             {card.name}
@@ -347,6 +253,36 @@ function CardItem({
               </button>
             </div>
           )}
+        </div>
+      )}
+      
+      {/* ブランクカード用の±ボタン（カード情報は表示しない） */}
+      {!isCompact && isBlankCard && showAddButton && (
+        <div className="p-1.5 sm:p-2">
+          <div className="flex gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); onAdd?.(card); }}
+              disabled={!canAdd}
+              className={`flex-1 py-1 sm:py-1.5 rounded text-xs sm:text-sm font-bold transition-colors ${
+                canAdd
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              ＋
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onRemove?.(card); }}
+              disabled={!count || count <= 0}
+              className={`flex-1 py-1 sm:py-1.5 rounded text-xs sm:text-sm font-bold transition-colors ${
+                count && count > 0
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              −
+            </button>
+          </div>
         </div>
       )}
       
