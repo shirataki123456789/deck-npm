@@ -23,6 +23,8 @@ function BlankCardCanvasLarge({ card }: { card: Card }) {
     if (!ctx) return;
     
     const containerWidth = container.offsetWidth;
+    if (containerWidth === 0) return;
+    
     const containerHeight = Math.round(containerWidth * (560 / 400));
     
     const scale = window.devicePixelRatio || 1;
@@ -36,11 +38,28 @@ function BlankCardCanvasLarge({ card }: { card: Card }) {
   }, [card]);
   
   useEffect(() => {
-    drawCanvas();
+    // 初回描画（少し遅延）
+    const timer = setTimeout(drawCanvas, 20);
+    
+    // ResizeObserverでコンテナサイズの変化を検知
+    const container = containerRef.current;
+    let resizeObserver: ResizeObserver | null = null;
+    
+    if (container && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        drawCanvas();
+      });
+      resizeObserver.observe(container);
+    }
     
     const handleResize = () => drawCanvas();
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+      resizeObserver?.disconnect();
+    };
   }, [drawCanvas]);
   
   return (

@@ -58,10 +58,11 @@ export default function CardGrid({
   );
 }
 
-// ブランクカードをCanvasで描画するコンポーネント（リサイズ対応）
-function BlankCardCanvas({ card }: { card: Card }) {
+// ブランクカードをCanvasで描画するコンポーネント（リサイズ・列数変更対応）
+function BlankCardCanvas({ card, colsCount }: { card: Card; colsCount?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastWidthRef = useRef<number>(0);
   
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -73,6 +74,10 @@ function BlankCardCanvas({ card }: { card: Card }) {
     
     const containerWidth = container.offsetWidth;
     if (containerWidth === 0) return; // まだマウントされていない
+    
+    // サイズが変わっていない場合はスキップ（パフォーマンス最適化）
+    if (containerWidth === lastWidthRef.current) return;
+    lastWidthRef.current = containerWidth;
     
     const containerHeight = Math.round(containerWidth * (560 / 400));
     
@@ -87,18 +92,36 @@ function BlankCardCanvas({ card }: { card: Card }) {
   }, [card]);
   
   useEffect(() => {
-    // 初回描画（少し遅延させてコンテナサイズが確定してから）
-    const timer = setTimeout(drawCanvas, 10);
+    // 列数が変わった時に強制再描画
+    lastWidthRef.current = 0;
     
-    // リサイズ時に再描画
-    const handleResize = () => drawCanvas();
+    // 初回描画（少し遅延させてコンテナサイズが確定してから）
+    const timer = setTimeout(drawCanvas, 20);
+    
+    // ResizeObserverでコンテナサイズの変化を検知
+    const container = containerRef.current;
+    let resizeObserver: ResizeObserver | null = null;
+    
+    if (container && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        drawCanvas();
+      });
+      resizeObserver.observe(container);
+    }
+    
+    // フォールバック: windowリサイズ時も再描画
+    const handleResize = () => {
+      lastWidthRef.current = 0;
+      drawCanvas();
+    };
     window.addEventListener('resize', handleResize);
     
     return () => {
       clearTimeout(timer);
       window.removeEventListener('resize', handleResize);
+      resizeObserver?.disconnect();
     };
-  }, [drawCanvas]);
+  }, [drawCanvas, colsCount]);
   
   return (
     <div ref={containerRef} className="w-full aspect-[400/560]">
@@ -165,7 +188,7 @@ function CardItem({
             decoding="async"
           />
         ) : isBlankCard ? (
-          <BlankCardCanvas card={card} />
+          <BlankCardCanvas card={card} colsCount={colsCount} />
         ) : (
           <div className="w-full aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 flex flex-col items-center justify-center text-gray-600">
             <span className={isCompact ? 'text-2xl' : 'text-4xl'}>?</span>
