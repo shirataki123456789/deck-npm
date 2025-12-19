@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, FilterOptions, DEFAULT_FILTER_OPTIONS, COLOR_ORDER } from '@/lib/types';
-import { decodeBlankCardFromQR } from '@/lib/deck';
+import { decodeBlankCardFromQR } from '@/lib/blankCardQR';
 import jsQR from 'jsqr';
 
 interface LeaderSelectProps {

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Deck, UNLIMITED_CARDS } from '@/lib/types';
 import { generateDeckImage, DeckImageCard } from '@/lib/imageGenerator';
-import { encodeBlankCardForQR } from '@/lib/deck';
+import { encodeBlankCardForQR } from '@/lib/blankCardQR';
 import QRCode from 'qrcode';
 
 interface DeckSidebarProps {
