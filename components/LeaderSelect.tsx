@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, FilterOptions, DEFAULT_FILTER_OPTIONS, COLOR_ORDER } from '@/lib/types';
+import { decodeBlankCardFromQR } from '@/lib/deck';
 import jsQR from 'jsqr';
 
 interface LeaderSelectProps {
@@ -69,14 +70,14 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
     );
   };
   
-  // QRコード読み取り（クライアントサイドで処理）
+  // QRコード読み取り（クライアントサイドで処理、複数QR対応）
   const handleQrUpload = async (file: File) => {
     try {
       const img = new Image();
       const url = URL.createObjectURL(file);
       
       img.onload = () => {
-        // 複数のサイズ・処理でQRコード検出を試みる
+        // 単一QRを検出する関数
         const tryDecode = (
           canvas: HTMLCanvasElement, 
           ctx: CanvasRenderingContext2D,
@@ -88,33 +89,28 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
           canvas.width = width;
           canvas.height = height;
           
-          // 白背景で塗りつぶし
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(0, 0, width, height);
-          
-          // 画像を描画
           ctx.drawImage(img, 0, 0, width, height);
           
           let imageData = ctx.getImageData(0, 0, width, height);
           const data = imageData.data;
           
-          // 二値化処理（コントラストを上げる）
           if (threshold) {
             for (let i = 0; i < data.length; i += 4) {
               const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
               const val = avg > 128 ? 255 : 0;
-              data[i] = val;     // R
-              data[i + 1] = val; // G
-              data[i + 2] = val; // B
+              data[i] = val;
+              data[i + 1] = val;
+              data[i + 2] = val;
             }
           }
           
-          // 色反転（黒白反転したQRコード対策）
           if (invert) {
             for (let i = 0; i < data.length; i += 4) {
-              data[i] = 255 - data[i];         // R
-              data[i + 1] = 255 - data[i + 1]; // G
-              data[i + 2] = 255 - data[i + 2]; // B
+              data[i] = 255 - data[i];
+              data[i + 1] = 255 - data[i + 1];
+              data[i + 2] = 255 - data[i + 2];
             }
           }
           
@@ -123,6 +119,79 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
           });
           
           return code?.data || null;
+        };
+        
+        // 複数QRを検出する関数（画像を分割してスキャン）
+        const findAllQRCodes = (
+          canvas: HTMLCanvasElement,
+          ctx: CanvasRenderingContext2D,
+          fullWidth: number,
+          fullHeight: number
+        ): string[] => {
+          const results: string[] = [];
+          const foundAreas: { x: number; y: number; w: number; h: number }[] = [];
+          
+          // まず全体から検出
+          canvas.width = fullWidth;
+          canvas.height = fullHeight;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, fullWidth, fullHeight);
+          ctx.drawImage(img, 0, 0, fullWidth, fullHeight);
+          
+          const imageData = ctx.getImageData(0, 0, fullWidth, fullHeight);
+          const code = jsQR(imageData.data, fullWidth, fullHeight, {
+            inversionAttempts: 'attemptBoth',
+          });
+          
+          if (code) {
+            results.push(code.data);
+            foundAreas.push({
+              x: code.location.topLeftCorner.x,
+              y: code.location.topLeftCorner.y,
+              w: code.location.bottomRightCorner.x - code.location.topLeftCorner.x,
+              h: code.location.bottomRightCorner.y - code.location.topLeftCorner.y,
+            });
+          }
+          
+          // 画像をグリッドに分割して追加のQRを探す（デッキ画像の下部カードエリア）
+          // カードグリッドは下部55%くらいにある想定
+          const gridStartY = Math.floor(fullHeight * 0.35);
+          const gridHeight = fullHeight - gridStartY;
+          const cellW = Math.floor(fullWidth / 10); // 10列
+          const cellH = Math.floor(gridHeight / 5);  // 5行
+          
+          for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 10; col++) {
+              const cellX = col * cellW;
+              const cellY = gridStartY + row * cellH;
+              
+              // 既に検出済みのエリアと重なっていたらスキップ
+              const overlaps = foundAreas.some(area => 
+                cellX < area.x + area.w && cellX + cellW > area.x &&
+                cellY < area.y + area.h && cellY + cellH > area.y
+              );
+              if (overlaps) continue;
+              
+              // セル領域を切り出して検出
+              canvas.width = cellW;
+              canvas.height = cellH;
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillRect(0, 0, cellW, cellH);
+              ctx.drawImage(img, cellX, cellY, cellW, cellH, 0, 0, cellW, cellH);
+              
+              const cellData = ctx.getImageData(0, 0, cellW, cellH);
+              const cellCode = jsQR(cellData.data, cellW, cellH, {
+                inversionAttempts: 'attemptBoth',
+              });
+              
+              if (cellCode && !results.includes(cellCode.data)) {
+                results.push(cellCode.data);
+                foundAreas.push({ x: cellX, y: cellY, w: cellW, h: cellH });
+              }
+            }
+          }
+          
+          return results;
         };
         
         const canvas = document.createElement('canvas');
@@ -134,42 +203,75 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
           return;
         }
         
-        let result: string | null = null;
+        // まず複数QR検出を試みる（高解像度で）
+        const scanWidth = Math.min(img.width, 2000);
+        const scanHeight = Math.round(scanWidth * img.height / img.width);
         
-        // 様々なサイズと処理で試行
-        const sizes = [
-          { w: img.width, h: img.height },           // オリジナルサイズ
-          { w: 800, h: Math.round(800 * img.height / img.width) },  // 800px幅
-          { w: 600, h: Math.round(600 * img.height / img.width) },  // 600px幅
-          { w: 400, h: Math.round(400 * img.height / img.width) },  // 400px幅
-          { w: 1200, h: Math.round(1200 * img.height / img.width) }, // 1200px幅（大きめ）
-        ];
+        const allQRs = findAllQRCodes(canvas, ctx, scanWidth, scanHeight);
         
-        // 各サイズで試行
-        for (const size of sizes) {
-          // 通常
-          result = tryDecode(canvas, ctx, size.w, size.h, false, false);
-          if (result) break;
-          
-          // 二値化
-          result = tryDecode(canvas, ctx, size.w, size.h, false, true);
-          if (result) break;
-          
-          // 反転
-          result = tryDecode(canvas, ctx, size.w, size.h, true, false);
-          if (result) break;
-          
-          // 二値化 + 反転
-          result = tryDecode(canvas, ctx, size.w, size.h, true, true);
-          if (result) break;
+        // デッキQRとブランクカードQRを分離
+        const deckQRs = allQRs.filter(qr => !qr.startsWith('B|'));
+        const blankCardQRs = allQRs.filter(qr => qr.startsWith('B|'));
+        
+        console.log(`Found ${allQRs.length} QR codes: ${deckQRs.length} deck, ${blankCardQRs.length} blank cards`);
+        
+        // ブランクカードをデコード
+        const blankCards: Card[] = [];
+        for (const qr of blankCardQRs) {
+          const card = decodeBlankCardFromQR(qr);
+          if (card) {
+            blankCards.push(card);
+            console.log('Decoded blank card:', card.name);
+          }
         }
         
         URL.revokeObjectURL(url);
         
-        if (result) {
-          onImport(result);
+        // 結果を処理
+        if (deckQRs.length > 0 || blankCards.length > 0) {
+          // ブランクカードがあれば先にインポート
+          if (blankCards.length > 0) {
+            // カスタムイベントでブランクカードを追加
+            window.dispatchEvent(new CustomEvent('importBlankCards', { detail: blankCards }));
+          }
+          
+          // デッキQRがあればインポート
+          if (deckQRs.length > 0) {
+            onImport(deckQRs[0]); // 最初のデッキQRを使用
+            
+            if (blankCards.length > 0) {
+              alert(`デッキをインポートしました。\nブランクカード ${blankCards.length} 枚も検出されました。`);
+            }
+          } else if (blankCards.length > 0) {
+            alert(`ブランクカード ${blankCards.length} 枚をインポートしました。\n※ デッキのQRコードは検出されませんでした。`);
+          }
         } else {
-          alert('QRコードが検出されませんでした。\n画像が鮮明でない、またはQRコードが小さすぎる可能性があります。');
+          // フォールバック：従来の方法で単一QR検出を試みる
+          let result: string | null = null;
+          const sizes = [
+            { w: img.width, h: img.height },
+            { w: 800, h: Math.round(800 * img.height / img.width) },
+            { w: 600, h: Math.round(600 * img.height / img.width) },
+            { w: 400, h: Math.round(400 * img.height / img.width) },
+            { w: 1200, h: Math.round(1200 * img.height / img.width) },
+          ];
+          
+          for (const size of sizes) {
+            result = tryDecode(canvas, ctx, size.w, size.h, false, false);
+            if (result) break;
+            result = tryDecode(canvas, ctx, size.w, size.h, false, true);
+            if (result) break;
+            result = tryDecode(canvas, ctx, size.w, size.h, true, false);
+            if (result) break;
+            result = tryDecode(canvas, ctx, size.w, size.h, true, true);
+            if (result) break;
+          }
+          
+          if (result) {
+            onImport(result);
+          } else {
+            alert('QRコードが検出されませんでした。\n画像が鮮明でない、またはQRコードが小さすぎる可能性があります。');
+          }
         }
       };
       

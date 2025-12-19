@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Deck, UNLIMITED_CARDS } from '@/lib/types';
 import { generateDeckImage, DeckImageCard } from '@/lib/imageGenerator';
+import { encodeBlankCardForQR } from '@/lib/deck';
 import QRCode from 'qrcode';
 
 interface DeckSidebarProps {
@@ -179,13 +180,36 @@ export default function DeckSidebar({
       
       // カード情報リストを作成（ブランクカード対応）
       const cards: DeckImageCard[] = [];
+      
+      // ブランクカード用のQRコードを事前生成（重複を避けるためキャッシュ）
+      const blankCardQRCache: Record<string, string> = {};
+      for (const info of deckCardInfos) {
+        if (info.card && !info.image_url && info.card.card_id.startsWith('BLANK-')) {
+          if (!blankCardQRCache[info.card.card_id]) {
+            try {
+              const encoded = encodeBlankCardForQR(info.card);
+              console.log(`Blank card QR data length: ${encoded.length} chars`);
+              blankCardQRCache[info.card.card_id] = await QRCode.toDataURL(encoded, {
+                width: 200,
+                margin: 1,
+                errorCorrectionLevel: 'L', // 低エラー訂正で情報量を増やす
+                color: { dark: '#000000', light: '#ffffff' },
+              });
+            } catch (e) {
+              console.warn('Failed to generate QR for blank card:', info.card.card_id, e);
+            }
+          }
+        }
+      }
+      
       deckCardInfos.forEach(info => {
         for (let i = 0; i < info.count; i++) {
           if (info.card && !info.image_url) {
-            // ブランクカード
+            // ブランクカード（QRコード付き）
             cards.push({
               url: '',
               card: info.card,
+              qrDataUrl: blankCardQRCache[info.card.card_id] || undefined,
             });
           } else {
             // 通常カード
