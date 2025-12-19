@@ -55,7 +55,11 @@ export function decodeBlankCardFromQR(encoded: string): Card | null {
       trigger: (parts[11] || '').replace(/¦/g, '|'),
       image_url: '', // ブランクカードは画像なし
       is_parallel: false,
-      block: '',
+      card_code: '',
+      rarity: '',
+      block_icon: '',
+      source: '',
+      series_id: '',
     };
   } catch (e) {
     console.error('Failed to decode blank card:', e);
