@@ -351,12 +351,57 @@ function drawBlankCardPlaceholder(
   ctx.fillText(card.card_id, x + width * 0.02, y + height * 0.99);
 }
 
+/**
+ * ブランクカードにQRコードを描画（イラストエリアに配置）
+ * QRコードはブランクカード情報をエンコードしたもの
+ */
+export async function drawBlankCardWithQR(
+  ctx: CanvasRenderingContext2D,
+  card: Card,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  qrDataUrl: string
+): Promise<void> {
+  // まず通常のブランクカードを描画
+  drawBlankCardPlaceholder(ctx, card, x, y, width, height);
+  
+  // QRコードをイラストエリアに描画
+  // イラストエリア: y=12%〜54% (高さ42%)、中央配置
+  const qrAreaY = y + height * 0.14;
+  const qrAreaHeight = height * 0.38;
+  const qrSize = Math.min(width * 0.7, qrAreaHeight * 0.9);
+  const qrX = x + (width - qrSize) / 2;
+  const qrY = qrAreaY + (qrAreaHeight - qrSize) / 2;
+  
+  try {
+    const qrImg = new Image();
+    await new Promise<void>((resolve, reject) => {
+      qrImg.onload = () => resolve();
+      qrImg.onerror = () => reject(new Error('QR load failed'));
+      qrImg.src = qrDataUrl;
+    });
+    
+    // 白背景を描画（QRの視認性向上）
+    ctx.fillStyle = 'white';
+    ctx.fillRect(qrX - 2, qrY - 2, qrSize + 4, qrSize + 4);
+    
+    // QRコードを描画
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+  } catch (e) {
+    // QR描画失敗時は何もしない（通常のブランクカードのまま）
+    console.warn('Failed to draw QR on blank card:', e);
+  }
+}
+
 // ブランクカード描画関数をエクスポート（CardGrid等で使用）
 export { drawBlankCardPlaceholder, isLightColor };
 
 export interface DeckImageCard {
   url: string;
   card?: Card; // ブランクカード用の情報
+  qrDataUrl?: string; // ブランクカード用QRコード（data URL）
 }
 
 export interface DeckImageOptions {
@@ -466,7 +511,12 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
     
     // ブランクカード（URLが空でカード情報がある場合）
     if (!cardData.url && cardData.card) {
-      drawBlankCardPlaceholder(ctx, cardData.card, x, y, CARD_WIDTH, CARD_HEIGHT);
+      // QRコードがあれば付きで描画、なければ通常描画
+      if (cardData.qrDataUrl) {
+        await drawBlankCardWithQR(ctx, cardData.card, x, y, CARD_WIDTH, CARD_HEIGHT, cardData.qrDataUrl);
+      } else {
+        drawBlankCardPlaceholder(ctx, cardData.card, x, y, CARD_WIDTH, CARD_HEIGHT);
+      }
       continue;
     }
     
