@@ -189,10 +189,12 @@ export default function DeckSidebar({
             try {
               const encoded = encodeBlankCardForQR(info.card);
               console.log(`Blank card QR data length: ${encoded.length} chars`);
+              
+              // QRコードを高解像度で生成（読み取り精度向上のため）
               blankCardQRCache[info.card.card_id] = await QRCode.toDataURL(encoded, {
-                width: 200,
-                margin: 1,
-                errorCorrectionLevel: 'L', // 低エラー訂正で情報量を増やす
+                width: 400, // 大きめに生成
+                margin: 2,  // マージンを少し大きく
+                errorCorrectionLevel: 'M', // 中程度のエラー訂正（読み取り精度とサイズのバランス）
                 color: { dark: '#000000', light: '#ffffff' },
               });
             } catch (e) {
