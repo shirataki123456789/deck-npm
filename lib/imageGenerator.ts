@@ -158,11 +158,11 @@ function drawBlankCardPlaceholder(
   ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
   ctx.fillRect(x, y + height * 0.12, width, height * 0.42);
   
-  // === 効果テキストエリア背景 (cyan: y=0.576~0.752) ===
+  // === 効果テキストエリア背景 (左右端まで拡大: x=0.02~0.98, y=0.576~0.752) ===
   ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  const effectX = x + width * 0.05;
+  const effectX = x + width * 0.02;
   const effectY = y + height * 0.576;
-  const effectW = width * 0.90;
+  const effectW = width * 0.96;
   const effectH = height * 0.176;
   ctx.fillRect(effectX, effectY, effectW, effectH);
   
@@ -239,19 +239,49 @@ function drawBlankCardPlaceholder(
     ctx.restore();
   }
   
-  // === 効果テキスト (cyan領域内) ===
+  // === 効果テキスト (拡大されたcyan領域内、動的フォントサイズ) ===
   if (card.text) {
     ctx.fillStyle = 'white';
-    const textFontSize = Math.round(height * 0.026);
-    ctx.font = `${textFontSize}px sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     
-    const textX = effectX + width * 0.015;
-    const textY = effectY + height * 0.008;
-    const maxWidth = effectW - width * 0.03;
-    const lineHeight = textFontSize * 1.25;
-    const maxLines = Math.floor((effectH - height * 0.016) / lineHeight);
+    const textPadding = width * 0.01;
+    const textX = effectX + textPadding;
+    const maxWidth = effectW - textPadding * 2;
+    const availableHeight = effectH - height * 0.01;
+    
+    // テキストの長さに応じてフォントサイズを動的に調整
+    const textLength = card.text.length;
+    let baseFontSize: number;
+    let lineHeightRatio: number;
+    
+    if (textLength <= 30) {
+      // 短いテキスト: 通常サイズ
+      baseFontSize = height * 0.024;
+      lineHeightRatio = 1.3;
+    } else if (textLength <= 60) {
+      // 中程度のテキスト: 少し小さく
+      baseFontSize = height * 0.021;
+      lineHeightRatio = 1.25;
+    } else if (textLength <= 100) {
+      // 長いテキスト: さらに小さく
+      baseFontSize = height * 0.018;
+      lineHeightRatio = 1.2;
+    } else if (textLength <= 150) {
+      // 非常に長いテキスト: かなり小さく
+      baseFontSize = height * 0.015;
+      lineHeightRatio = 1.15;
+    } else {
+      // 極めて長いテキスト: 最小サイズ
+      baseFontSize = height * 0.013;
+      lineHeightRatio = 1.1;
+    }
+    
+    const textFontSize = Math.max(1, Math.round(baseFontSize));
+    ctx.font = `${textFontSize}px sans-serif`;
+    const lineHeight = textFontSize * lineHeightRatio;
+    const maxLines = Math.floor(availableHeight / lineHeight);
+    const textY = effectY + height * 0.005;
     
     const paragraphs = card.text.split('\n');
     const allLines: string[] = [];
@@ -275,6 +305,7 @@ function drawBlankCardPlaceholder(
       }
     }
     
+    // テキストが収まりきらない場合は省略記号
     if (allLines.length === maxLines && card.text.length > allLines.join('').length) {
       const lastLine = allLines[maxLines - 1];
       if (lastLine.length > 1) {
