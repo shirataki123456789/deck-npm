@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, Deck, UNLIMITED_CARDS } from '@/lib/types';
+import { drawBlankCardPlaceholder } from '@/lib/imageGenerator';
 
 interface DeckPreviewProps {
   deck: Deck;
@@ -464,10 +465,10 @@ export default function DeckPreview({
                 </div>
               )}
               
-              {/* ブランクカードマーク */}
+              {/* ブランクカード画像（Canvasで描画） */}
               {!selectedCard.image_url && (
-                <div className="mb-4 p-3 bg-purple-50 rounded-lg text-center">
-                  <span className="text-purple-600 font-bold">📝 ブランクカード（仮登録）</span>
+                <div className="mb-4">
+                  <BlankCardCanvas card={selectedCard} />
                 </div>
               )}
               
@@ -542,6 +543,43 @@ export default function DeckPreview({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ブランクカードをCanvasで描画するコンポーネント
+function BlankCardCanvas({ card }: { card: Card }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // カードサイズ（モーダル内での表示用）
+    const width = 280;
+    const height = 392; // 280 * (560/400)
+    
+    canvas.width = width;
+    canvas.height = height;
+    
+    // 背景をクリア
+    ctx.clearRect(0, 0, width, height);
+    
+    // ブランクカードを描画
+    drawBlankCardPlaceholder(ctx, card, 0, 0, width, height);
+  }, [card]);
+  
+  return (
+    <div className="flex flex-col items-center">
+      <canvas 
+        ref={canvasRef} 
+        className="rounded shadow-lg max-w-full"
+        style={{ maxWidth: '280px' }}
+      />
+      <p className="text-xs text-purple-600 mt-2">📝 ブランクカード（仮登録）</p>
     </div>
   );
 }
