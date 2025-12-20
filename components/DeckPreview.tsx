@@ -4,6 +4,69 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, Deck, UNLIMITED_CARDS } from '@/lib/types';
 import { drawBlankCardPlaceholder } from '@/lib/imageGenerator';
 
+// ブランクカードをCanvasで描画するコンポーネント
+function BlankCardCanvas({ card, onClick }: { card: Card; onClick?: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastWidthRef = useRef<number>(0);
+  
+  const drawCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const containerWidth = container.offsetWidth;
+    if (containerWidth === 0) return;
+    
+    if (containerWidth === lastWidthRef.current) return;
+    lastWidthRef.current = containerWidth;
+    
+    const containerHeight = Math.round(containerWidth * (560 / 400));
+    
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = containerWidth * scale;
+    canvas.height = containerHeight * scale;
+    canvas.style.width = `${containerWidth}px`;
+    canvas.style.height = `${containerHeight}px`;
+    
+    ctx.scale(scale, scale);
+    drawBlankCardPlaceholder(ctx, card, 0, 0, containerWidth, containerHeight);
+  }, [card]);
+  
+  useEffect(() => {
+    lastWidthRef.current = 0;
+    const timer = setTimeout(drawCanvas, 20);
+    
+    const container = containerRef.current;
+    let resizeObserver: ResizeObserver | null = null;
+    
+    if (container && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => drawCanvas());
+      resizeObserver.observe(container);
+    }
+    
+    window.addEventListener('resize', () => { lastWidthRef.current = 0; drawCanvas(); });
+    
+    return () => {
+      clearTimeout(timer);
+      resizeObserver?.disconnect();
+    };
+  }, [drawCanvas]);
+  
+  return (
+    <div 
+      ref={containerRef} 
+      className="w-full aspect-[400/560] cursor-pointer hover:opacity-80 transition-opacity"
+      onClick={onClick}
+    >
+      <canvas ref={canvasRef} className="w-full h-full rounded" />
+    </div>
+  );
+}
+
 interface DeckPreviewProps {
   deck: Deck;
   leaderCard: Card;
@@ -333,18 +396,10 @@ export default function DeckPreview({
                       onClick={() => setSelectedCard(card)}
                     />
                   ) : (
-                    <div 
-                      className="w-full aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 rounded flex flex-col items-center justify-center text-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+                    <BlankCardCanvas
+                      card={card}
                       onClick={() => setSelectedCard(card)}
-                    >
-                      <span className={isCompact ? 'text-xl' : 'text-3xl'}>?</span>
-                      {!isCompact && (
-                        <>
-                          <span className="text-[10px] mt-1 px-1 text-center truncate w-full">{card.name}</span>
-                          <span className="text-[8px]">{card.card_id}</span>
-                        </>
-                      )}
-                    </div>
+                    />
                   )}
                   {/* 枚数バッジ */}
                   <div className={`absolute top-0.5 right-0.5 bg-blue-600 text-white rounded-full font-bold ${
