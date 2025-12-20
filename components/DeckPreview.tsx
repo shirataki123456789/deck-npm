@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, Deck, UNLIMITED_CARDS } from '@/lib/types';
 import { drawBlankCardPlaceholder } from '@/lib/imageGenerator';
+import ImageModal from './ImageModal';
 
 // ブランクカードをCanvasで描画するコンポーネント
 function BlankCardCanvas({ card, onClick }: { card: Card; onClick?: () => void }) {
@@ -103,7 +104,7 @@ export default function DeckPreview({
   const [initialLoading, setInitialLoading] = useState(true);
   const [colsCount, setColsCount] = useState(5);
   const [showStats, setShowStats] = useState(true);
-  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
   const lastCardIdsRef = useRef<string>('');
   
   // カードIDリストが変わった時だけソート順を取得
@@ -384,23 +385,35 @@ export default function DeckPreview({
               const isUnlimited = UNLIMITED_CARDS.includes(card.card_id);
               const isCompact = colsCount >= 5;
               const isBlankCard = !card.image_url;
+              const canAdd = isUnlimited || count < 4;
               return (
                 <div key={`${card.card_id}-${idx}`} className="relative">
-                  {/* カード画像またはプレースホルダー（クリックで詳細表示） */}
+                  {/* カード画像またはプレースホルダー（クリックで+1枚追加） */}
                   {card.image_url ? (
                     <img
                       src={card.image_url}
                       alt={card.name}
-                      className="w-full rounded cursor-pointer hover:opacity-80 transition-opacity"
+                      className={`w-full rounded transition-opacity ${canAdd ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'}`}
                       loading="lazy"
-                      onClick={() => setSelectedCard(card)}
+                      onClick={() => canAdd && onAddCard(card)}
                     />
                   ) : (
                     <BlankCardCanvas
                       card={card}
-                      onClick={() => setSelectedCard(card)}
+                      onClick={() => canAdd && onAddCard(card)}
                     />
                   )}
+                  {/* 虫眼鏡ボタン（モーダル表示） */}
+                  <button
+                    onClick={() => setZoomedCard(card)}
+                    className={`absolute bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition-opacity ${
+                      isCompact 
+                        ? 'bottom-6 left-0.5 w-5 h-5 text-[10px]' 
+                        : 'bottom-8 left-1 w-7 h-7 text-sm'
+                    } flex items-center justify-center`}
+                  >
+                    🔍
+                  </button>
                   {/* 枚数バッジ */}
                   <div className={`absolute top-0.5 right-0.5 bg-blue-600 text-white rounded-full font-bold ${
                     isCompact ? 'text-[10px] px-1' : 'text-xs px-1.5 py-0.5'
@@ -427,7 +440,7 @@ export default function DeckPreview({
                   <div className="absolute bottom-0 left-0 right-0 flex">
                     <button
                       onClick={() => onAddCard(card)}
-                      disabled={!isUnlimited && count >= 4}
+                      disabled={!canAdd}
                       className={`flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold ${
                         isCompact ? 'text-[10px] py-0.5' : 'text-xs py-1'
                       }`}
@@ -484,123 +497,8 @@ export default function DeckPreview({
         </div>
       </div>
       
-      {/* カード詳細モーダル */}
-      {selectedCard && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-          onClick={() => setSelectedCard(null)}
-        >
-          <div 
-            className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4">
-              {/* ヘッダー */}
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-lg">{selectedCard.name}</h3>
-                  <p className="text-sm text-gray-500">{selectedCard.card_id}</p>
-                </div>
-                <button
-                  onClick={() => setSelectedCard(null)}
-                  className="p-1 hover:bg-gray-100 rounded text-gray-500"
-                >
-                  ✕
-                </button>
-              </div>
-              
-              {/* カード画像（通常カードのみ） */}
-              {selectedCard.image_url && (
-                <div className="mb-4">
-                  <img
-                    src={selectedCard.image_url}
-                    alt={selectedCard.name}
-                    className="w-full max-w-xs mx-auto rounded"
-                  />
-                </div>
-              )}
-              
-              {/* ブランクカード画像（Canvasで描画） */}
-              {!selectedCard.image_url && (
-                <div className="mb-4 flex flex-col items-center">
-                  <div className="w-full max-w-xs">
-                    <BlankCardCanvas card={selectedCard} />
-                  </div>
-                  <p className="text-xs text-purple-600 mt-2">📝 ブランクカード（仮登録）</p>
-                </div>
-              )}
-              
-              {/* 基本情報 */}
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <div className="bg-gray-50 p-2 rounded">
-                  <span className="text-xs text-gray-500">タイプ</span>
-                  <p className="font-medium">{selectedCard.type || '-'}</p>
-                </div>
-                <div className="bg-gray-50 p-2 rounded">
-                  <span className="text-xs text-gray-500">コスト</span>
-                  <p className="font-medium">{selectedCard.cost >= 0 ? selectedCard.cost : '-'}</p>
-                </div>
-                <div className="bg-gray-50 p-2 rounded">
-                  <span className="text-xs text-gray-500">パワー</span>
-                  <p className="font-medium">{selectedCard.power > 0 ? selectedCard.power : '-'}</p>
-                </div>
-                <div className="bg-gray-50 p-2 rounded">
-                  <span className="text-xs text-gray-500">カウンター</span>
-                  <p className="font-medium">{selectedCard.counter > 0 ? `+${selectedCard.counter}` : '-'}</p>
-                </div>
-                <div className="bg-gray-50 p-2 rounded">
-                  <span className="text-xs text-gray-500">属性</span>
-                  <p className="font-medium">{selectedCard.attribute || '-'}</p>
-                </div>
-                <div className="bg-gray-50 p-2 rounded">
-                  <span className="text-xs text-gray-500">色</span>
-                  <div className="flex gap-1 mt-0.5">
-                    {selectedCard.color.length > 0 ? selectedCard.color.map(c => (
-                      <span key={c} className={`color-badge color-badge-${c} text-xs`}>{c}</span>
-                    )) : <span className="text-gray-400">-</span>}
-                  </div>
-                </div>
-              </div>
-              
-              {/* 特徴 */}
-              {selectedCard.features && selectedCard.features.length > 0 && (
-                <div className="mb-4">
-                  <span className="text-xs text-gray-500">特徴</span>
-                  <p className="text-sm">{selectedCard.features.join(' / ')}</p>
-                </div>
-              )}
-              
-              {/* 効果テキスト */}
-              {selectedCard.text && (
-                <div className="mb-4">
-                  <span className="text-xs text-gray-500">効果</span>
-                  <div className="mt-1 p-3 bg-gray-50 rounded text-sm whitespace-pre-wrap">
-                    {selectedCard.text}
-                  </div>
-                </div>
-              )}
-              
-              {/* トリガー */}
-              {selectedCard.trigger && (
-                <div className="mb-4">
-                  <span className="text-xs text-gray-500">トリガー</span>
-                  <div className="mt-1 p-3 bg-yellow-50 rounded text-sm whitespace-pre-wrap">
-                    {selectedCard.trigger}
-                  </div>
-                </div>
-              )}
-              
-              {/* 閉じるボタン */}
-              <button
-                onClick={() => setSelectedCard(null)}
-                className="w-full btn btn-secondary mt-2"
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 画像拡大モーダル */}
+      <ImageModal card={zoomedCard} onClose={() => setZoomedCard(null)} />
     </div>
   );
 }
