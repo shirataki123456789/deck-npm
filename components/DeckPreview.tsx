@@ -39,6 +39,7 @@ export default function DeckPreview({
   const [initialLoading, setInitialLoading] = useState(true);
   const [colsCount, setColsCount] = useState(5);
   const [showStats, setShowStats] = useState(true);
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const lastCardIdsRef = useRef<string>('');
   
   // カードIDリストが変わった時だけソート順を取得
@@ -321,16 +322,20 @@ export default function DeckPreview({
               const isBlankCard = !card.image_url;
               return (
                 <div key={`${card.card_id}-${idx}`} className="relative">
-                  {/* カード画像またはプレースホルダー */}
+                  {/* カード画像またはプレースホルダー（クリックで詳細表示） */}
                   {card.image_url ? (
                     <img
                       src={card.image_url}
                       alt={card.name}
-                      className="w-full rounded"
+                      className="w-full rounded cursor-pointer hover:opacity-80 transition-opacity"
                       loading="lazy"
+                      onClick={() => setSelectedCard(card)}
                     />
                   ) : (
-                    <div className="w-full aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 rounded flex flex-col items-center justify-center text-gray-600">
+                    <div 
+                      className="w-full aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 rounded flex flex-col items-center justify-center text-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => setSelectedCard(card)}
+                    >
                       <span className={isCompact ? 'text-xl' : 'text-3xl'}>?</span>
                       {!isCompact && (
                         <>
@@ -422,6 +427,121 @@ export default function DeckPreview({
           </button>
         </div>
       </div>
+      
+      {/* カード詳細モーダル */}
+      {selectedCard && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedCard(null)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4">
+              {/* ヘッダー */}
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-lg">{selectedCard.name}</h3>
+                  <p className="text-sm text-gray-500">{selectedCard.card_id}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedCard(null)}
+                  className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              {/* カード画像（通常カードのみ） */}
+              {selectedCard.image_url && (
+                <div className="mb-4">
+                  <img
+                    src={selectedCard.image_url}
+                    alt={selectedCard.name}
+                    className="w-full max-w-xs mx-auto rounded"
+                  />
+                </div>
+              )}
+              
+              {/* ブランクカードマーク */}
+              {!selectedCard.image_url && (
+                <div className="mb-4 p-3 bg-purple-50 rounded-lg text-center">
+                  <span className="text-purple-600 font-bold">📝 ブランクカード（仮登録）</span>
+                </div>
+              )}
+              
+              {/* 基本情報 */}
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-gray-50 p-2 rounded">
+                  <span className="text-xs text-gray-500">タイプ</span>
+                  <p className="font-medium">{selectedCard.type || '-'}</p>
+                </div>
+                <div className="bg-gray-50 p-2 rounded">
+                  <span className="text-xs text-gray-500">コスト</span>
+                  <p className="font-medium">{selectedCard.cost >= 0 ? selectedCard.cost : '-'}</p>
+                </div>
+                <div className="bg-gray-50 p-2 rounded">
+                  <span className="text-xs text-gray-500">パワー</span>
+                  <p className="font-medium">{selectedCard.power > 0 ? selectedCard.power : '-'}</p>
+                </div>
+                <div className="bg-gray-50 p-2 rounded">
+                  <span className="text-xs text-gray-500">カウンター</span>
+                  <p className="font-medium">{selectedCard.counter > 0 ? `+${selectedCard.counter}` : '-'}</p>
+                </div>
+                <div className="bg-gray-50 p-2 rounded">
+                  <span className="text-xs text-gray-500">属性</span>
+                  <p className="font-medium">{selectedCard.attribute || '-'}</p>
+                </div>
+                <div className="bg-gray-50 p-2 rounded">
+                  <span className="text-xs text-gray-500">色</span>
+                  <div className="flex gap-1 mt-0.5">
+                    {selectedCard.color.length > 0 ? selectedCard.color.map(c => (
+                      <span key={c} className={`color-badge color-badge-${c} text-xs`}>{c}</span>
+                    )) : <span className="text-gray-400">-</span>}
+                  </div>
+                </div>
+              </div>
+              
+              {/* 特徴 */}
+              {selectedCard.features && selectedCard.features.length > 0 && (
+                <div className="mb-4">
+                  <span className="text-xs text-gray-500">特徴</span>
+                  <p className="text-sm">{selectedCard.features.join(' / ')}</p>
+                </div>
+              )}
+              
+              {/* 効果テキスト */}
+              {selectedCard.text && (
+                <div className="mb-4">
+                  <span className="text-xs text-gray-500">効果</span>
+                  <div className="mt-1 p-3 bg-gray-50 rounded text-sm whitespace-pre-wrap">
+                    {selectedCard.text}
+                  </div>
+                </div>
+              )}
+              
+              {/* トリガー */}
+              {selectedCard.trigger && (
+                <div className="mb-4">
+                  <span className="text-xs text-gray-500">トリガー</span>
+                  <div className="mt-1 p-3 bg-yellow-50 rounded text-sm whitespace-pre-wrap">
+                    {selectedCard.trigger}
+                  </div>
+                </div>
+              )}
+              
+              {/* 閉じるボタン */}
+              <button
+                onClick={() => setSelectedCard(null)}
+                className="w-full btn btn-secondary mt-2"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
