@@ -280,13 +280,31 @@ export default function DeckMode() {
     setView('leader');
   };
   
-  // デッキインポート（通常のデッキのみ、ブランクカードは含まない）
+  // デッキインポート（ブランクカードの枚数情報も含む）
   const handleImportDeck = async (text: string) => {
     try {
+      // ブランクカード枚数情報を抽出
+      // フォーマット: #BLANK:ID=枚数,ID=枚数
+      let blankCardCounts: Record<string, number> = {};
+      let cleanText = text;
+      
+      const blankMatch = text.match(/#BLANK:(.+)$/m);
+      if (blankMatch) {
+        cleanText = text.replace(/\n?#BLANK:.+$/m, '');
+        const blankParts = blankMatch[1].split(',');
+        blankParts.forEach(part => {
+          const [id, countStr] = part.split('=');
+          if (id && countStr) {
+            blankCardCounts[id.trim()] = parseInt(countStr.trim(), 10) || 0;
+          }
+        });
+        console.log('Blank card counts from QR:', blankCardCounts);
+      }
+      
       const res = await fetch('/api/deck', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'import', text }),
+        body: JSON.stringify({ action: 'import', text: cleanText }),
       });
       const data = await res.json();
       
@@ -296,7 +314,15 @@ export default function DeckMode() {
       }
       
       if (data.deck) {
-        setDeck(data.deck);
+        // ブランクカードの枚数をデッキに反映
+        const deckWithBlankCards = {
+          ...data.deck,
+          cards: {
+            ...data.deck.cards,
+            ...blankCardCounts,
+          },
+        };
+        setDeck(deckWithBlankCards);
         
         // リーダーカード情報を取得（allCardsから検索、またはAPIから取得）
         if (data.deck.leader) {
@@ -321,6 +347,12 @@ export default function DeckMode() {
           if (foundLeader) {
             setLeaderCard(foundLeader);
             setView('preview');
+            
+            // ブランクカード枚数があれば通知
+            if (Object.keys(blankCardCounts).length > 0) {
+              const totalBlank = Object.values(blankCardCounts).reduce((sum, c) => sum + c, 0);
+              console.log(`Imported ${totalBlank} blank cards`);
+            }
           } else {
             alert('リーダーカードが見つかりませんでした: ' + data.deck.leader);
           }

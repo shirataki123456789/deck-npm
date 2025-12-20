@@ -153,6 +153,7 @@ export default function DeckSidebar({
     try {
       // エクスポートテキストを取得（ブランクカードは除外してQR生成）
       const normalCardIds = Object.keys(deck.cards).filter(id => !id.startsWith('BLANK-'));
+      const blankCardEntries = Object.entries(deck.cards).filter(([id]) => id.startsWith('BLANK-'));
       const normalDeck = {
         ...deck,
         cards: Object.fromEntries(
@@ -169,7 +170,14 @@ export default function DeckSidebar({
         }),
       });
       const exportData = await exportRes.json();
-      const qrText = exportData.text || '';
+      let qrText = exportData.text || '';
+      
+      // ブランクカードの枚数情報を追加
+      // フォーマット: #BLANK:ID=枚数,ID=枚数
+      if (blankCardEntries.length > 0) {
+        const blankInfo = blankCardEntries.map(([id, count]) => `${id}=${count}`).join(',');
+        qrText += `\n#BLANK:${blankInfo}`;
+      }
       
       // QRコードをData URLとして生成
       const qrDataUrl = qrText ? await QRCode.toDataURL(qrText, {
