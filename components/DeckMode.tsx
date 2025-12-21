@@ -426,6 +426,7 @@ export default function DeckMode() {
           <LeaderSelect
             onSelect={handleSelectLeader}
             onImport={handleImportDeck}
+            blankLeaders={blankCards.filter(c => c.type === 'LEADER')}
           />
         )}
         

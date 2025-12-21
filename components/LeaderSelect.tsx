@@ -1,16 +1,57 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, FilterOptions, DEFAULT_FILTER_OPTIONS, COLOR_ORDER } from '@/lib/types';
 import { decodeBlankCardFromQR } from '@/lib/blankCardQR';
+import { drawBlankCardPlaceholder } from '@/lib/imageGenerator';
 import jsQR from 'jsqr';
+
+// ブランクリーダー表示用Canvas
+function BlankLeaderCanvas({ card, onClick }: { card: Card; onClick?: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const containerWidth = container.offsetWidth;
+    if (containerWidth === 0) return;
+    
+    const containerHeight = Math.round(containerWidth * (560 / 400));
+    
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = containerWidth * scale;
+    canvas.height = containerHeight * scale;
+    canvas.style.width = `${containerWidth}px`;
+    canvas.style.height = `${containerHeight}px`;
+    
+    ctx.scale(scale, scale);
+    drawBlankCardPlaceholder(ctx, card, 0, 0, containerWidth, containerHeight);
+  }, [card]);
+  
+  return (
+    <div 
+      ref={containerRef} 
+      className="w-full aspect-[400/560] cursor-pointer"
+      onClick={onClick}
+    >
+      <canvas ref={canvasRef} className="w-full h-full" />
+    </div>
+  );
+}
 
 interface LeaderSelectProps {
   onSelect: (card: Card) => void;
   onImport: (text: string) => void;
+  blankLeaders?: Card[]; // ブランクカードのリーダー
 }
 
-export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) {
+export default function LeaderSelect({ onSelect, onImport, blankLeaders = [] }: LeaderSelectProps) {
   const [leaders, setLeaders] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [parallelMode, setParallelMode] = useState<'normal' | 'parallel' | 'both'>('normal');
@@ -46,20 +87,25 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
     fetchLeaders();
   }, [fetchLeaders]);
   
+  // ブランクリーダーを含む全リーダー
+  const allLeaders = useMemo(() => {
+    return [...blankLeaders, ...leaders];
+  }, [blankLeaders, leaders]);
+  
   // 色フィルター適用
   const filteredLeaders = useMemo(() => {
-    if (selectedColors.length === 0) return leaders;
-    return leaders.filter(leader => 
+    if (selectedColors.length === 0) return allLeaders;
+    return allLeaders.filter(leader => 
       leader.color.some(c => selectedColors.includes(c))
     );
-  }, [leaders, selectedColors]);
+  }, [allLeaders, selectedColors]);
   
   // 利用可能な色一覧
   const availableColors = useMemo(() => {
     const colors = new Set<string>();
-    leaders.forEach(leader => leader.color.forEach(c => colors.add(c)));
+    allLeaders.forEach(leader => leader.color.forEach(c => colors.add(c)));
     return COLOR_ORDER.filter(c => colors.has(c));
-  }, [leaders]);
+  }, [allLeaders]);
   
   // 色の選択/解除
   const toggleColor = (color: string) => {
@@ -129,6 +175,42 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
           return code?.data || null;
         };
         
+        // 二値化処理付きQR検出
+        const decodeQRFromRegionWithThreshold = (
+          srcX: number,
+          srcY: number,
+          srcW: number,
+          srcH: number,
+          scale: number = 1
+        ): string | null => {
+          const w = Math.floor(srcW * scale);
+          const h = Math.floor(srcH * scale);
+          
+          canvas.width = w;
+          canvas.height = h;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, w, h);
+          
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const data = imageData.data;
+          
+          // 二値化処理
+          for (let i = 0; i < data.length; i += 4) {
+            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            const val = avg > 128 ? 255 : 0;
+            data[i] = val;
+            data[i + 1] = val;
+            data[i + 2] = val;
+          }
+          
+          const code = jsQR(data, w, h, {
+            inversionAttempts: 'attemptBoth',
+          });
+          
+          return code?.data || null;
+        };
+        
         // 結果格納
         let deckQR: string | null = null;
         const blankCardQRs: string[] = [];
@@ -165,14 +247,48 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
             
             // QR読み取り試行
             let cardQR: string | null = null;
-            for (const scale of [2, 3, 4, 1.5]) {
+            
+            // 様々なスケールで試行（より多くのスケールを試す）
+            const scales = [3, 4, 5, 6, 2, 2.5, 3.5, 4.5, 1.5, 7, 8];
+            
+            for (const scale of scales) {
+              // 通常の読み取り
               cardQR = decodeQRFromRegion(qrAreaX, qrAreaY, qrAreaW, qrAreaH, scale);
-              if (cardQR) break;
+              if (cardQR && cardQR.startsWith('B|')) {
+                console.log(`[row=${row}, col=${col}] scale=${scale} found`);
+                break;
+              }
+              
+              // 二値化処理を試す
+              cardQR = decodeQRFromRegionWithThreshold(qrAreaX, qrAreaY, qrAreaW, qrAreaH, scale);
+              if (cardQR && cardQR.startsWith('B|')) {
+                console.log(`[row=${row}, col=${col}] scale=${scale} (threshold) found`);
+                break;
+              }
+              
+              cardQR = null;
+            }
+            
+            // 見つからない場合、少し広い領域で試す
+            if (!cardQR) {
+              const qrAreaX2 = cardX + cardW * 0.10;
+              const qrAreaY2 = cardY + cardH * 0.12;
+              const qrAreaW2 = cardW * 0.80;
+              const qrAreaH2 = cardH * 0.42;
+              
+              for (const scale of [3, 4, 5, 6]) {
+                cardQR = decodeQRFromRegion(qrAreaX2, qrAreaY2, qrAreaW2, qrAreaH2, scale);
+                if (cardQR && cardQR.startsWith('B|')) {
+                  console.log(`[row=${row}, col=${col}] scale=${scale} (wider area) found`);
+                  break;
+                }
+                cardQR = null;
+              }
             }
             
             if (cardQR && cardQR.startsWith('B|') && !blankCardQRs.includes(cardQR)) {
               blankCardQRs.push(cardQR);
-              console.log(`Found blank card QR at row=${row}, col=${col}`);
+              console.log(`Added blank card QR from row=${row}, col=${col}: ${cardQR.substring(0, 40)}...`);
             }
           }
         }
@@ -378,43 +494,58 @@ export default function LeaderSelect({ onSelect, onImport }: LeaderSelectProps) 
           className="grid gap-2"
           style={{ gridTemplateColumns: `repeat(${colsCount}, minmax(0, 1fr))` }}
         >
-          {filteredLeaders.map((leader) => (
-            <div
-              key={leader.card_id}
-              className="bg-white rounded-lg shadow overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => onSelect(leader)}
-            >
-              <div className="relative">
-                <img
-                  src={leader.image_url}
-                  alt={leader.name}
-                  className="w-full aspect-[400/560] object-cover"
-                  loading="lazy"
-                />
-                {leader.is_parallel && (
-                  <div className={`absolute top-0.5 left-0.5 bg-yellow-400 text-black font-bold rounded ${
-                    isCompact ? 'text-[8px] px-0.5' : 'text-xs px-1.5 py-0.5'
-                  }`}>
-                    {isCompact ? 'P' : '✨P'}
+          {filteredLeaders.map((leader) => {
+            const isBlankLeader = !leader.image_url;
+            
+            return (
+              <div
+                key={leader.card_id}
+                className="bg-white rounded-lg shadow overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => onSelect(leader)}
+              >
+                <div className="relative">
+                  {isBlankLeader ? (
+                    <BlankLeaderCanvas card={leader} />
+                  ) : (
+                    <img
+                      src={leader.image_url}
+                      alt={leader.name}
+                      className="w-full aspect-[400/560] object-cover"
+                      loading="lazy"
+                    />
+                  )}
+                  {leader.is_parallel && (
+                    <div className={`absolute top-0.5 left-0.5 bg-yellow-400 text-black font-bold rounded ${
+                      isCompact ? 'text-[8px] px-0.5' : 'text-xs px-1.5 py-0.5'
+                    }`}>
+                      {isCompact ? 'P' : '✨P'}
+                    </div>
+                  )}
+                  {isBlankLeader && (
+                    <div className={`absolute top-0.5 right-0.5 bg-purple-600 text-white font-bold rounded ${
+                      isCompact ? 'text-[8px] px-0.5' : 'text-xs px-1.5 py-0.5'
+                    }`}>
+                      {isCompact ? '📝' : '📝 BLANK'}
+                    </div>
+                  )}
+                </div>
+                {/* カード情報（コンパクト時は非表示） */}
+                {!isCompact && (
+                  <div className="p-2">
+                    <div className="text-sm font-medium truncate">{leader.name}</div>
+                    <div className="text-xs text-gray-500">{leader.card_id}</div>
+                    <div className="flex gap-1 mt-1">
+                      {leader.color.map(c => (
+                        <span key={c} className={`color-badge color-badge-${c}`}>
+                          {c}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-              {/* カード情報（コンパクト時は非表示） */}
-              {!isCompact && (
-                <div className="p-2">
-                  <div className="text-sm font-medium truncate">{leader.name}</div>
-                  <div className="text-xs text-gray-500">{leader.card_id}</div>
-                  <div className="flex gap-1 mt-1">
-                    {leader.color.map(c => (
-                      <span key={c} className={`color-badge color-badge-${c}`}>
-                        {c}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

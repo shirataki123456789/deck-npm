@@ -38,6 +38,7 @@ export default function BlankCardModal({
   const [cardType, setCardType] = useState<string>('CHARACTER');
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [cost, setCost] = useState<number>(0);
+  const [life, setLife] = useState<number>(5); // リーダー用ライフ
   const [power, setPower] = useState<number>(5000);
   const [counter, setCounter] = useState<number>(1000);
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
@@ -58,6 +59,8 @@ export default function BlankCardModal({
       setCardType(editCard.type);
       setSelectedColors(editCard.color);
       setCost(editCard.cost >= 0 ? editCard.cost : 0);
+      // LEADERの場合、block_iconにライフが入っている可能性
+      setLife(editCard.type === 'LEADER' && editCard.block_icon ? parseInt(editCard.block_icon) || 5 : 5);
       setPower(editCard.power);
       setCounter(editCard.counter);
       // 属性は/区切りで保存されている場合があるので分割
@@ -78,6 +81,7 @@ export default function BlankCardModal({
     setCardType('CHARACTER');
     setSelectedColors([]);
     setCost(0);
+    setLife(5);
     setPower(5000);
     setCounter(1000);
     setSelectedAttributes([]);
@@ -117,19 +121,20 @@ export default function BlankCardModal({
     }
     
     const finalName = cardName.trim() || '不明カード';
+    const isLeader = cardType === 'LEADER';
     
     const blankCard: Card = {
       name: finalName,
       card_id: finalCardId,
       card_code: '',
       type: cardType,
-      rarity: '?',
-      cost: cardType === 'LEADER' ? -1 : cost,
+      rarity: isLeader ? 'L' : '?',
+      cost: isLeader ? -1 : cost,
       attribute: selectedAttributes.join('/'), // 複数選択は/区切りで保存
       power: power,
-      counter: counter,
+      counter: isLeader ? 0 : counter,
       color: selectedColors,
-      block_icon: '',
+      block_icon: isLeader ? String(life) : '', // LEADERの場合ライフを保存
       features: selectedFeatures,
       text: effectText,
       trigger: trigger,
@@ -266,14 +271,16 @@ export default function BlankCardModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               タイプ
             </label>
-            <div className="flex gap-2">
-              {['CHARACTER', 'EVENT', 'STAGE'].map(type => (
+            <div className="flex gap-2 flex-wrap">
+              {['LEADER', 'CHARACTER', 'EVENT', 'STAGE'].map(type => (
                 <button
                   key={type}
                   onClick={() => setCardType(type)}
-                  className={`flex-1 py-2 rounded border text-sm transition-colors ${
+                  className={`flex-1 min-w-[70px] py-2 rounded border text-sm transition-colors ${
                     cardType === type
-                      ? 'bg-green-600 text-white border-green-600'
+                      ? type === 'LEADER' 
+                        ? 'bg-yellow-500 text-white border-yellow-500'
+                        : 'bg-green-600 text-white border-green-600'
                       : 'bg-white border-gray-300 hover:bg-gray-50'
                   }`}
                 >
@@ -333,21 +340,39 @@ export default function BlankCardModal({
             )}
           </div>
           
-          {/* コスト・パワー・カウンター */}
+          {/* コスト・パワー・カウンター（またはライフ・パワー） */}
           <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                コスト
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="10"
-                value={cost}
-                onChange={(e) => setCost(Number(e.target.value))}
-                className="w-full border rounded px-3 py-2 text-sm"
-              />
-            </div>
+            {cardType === 'LEADER' ? (
+              // LEADERの場合：ライフ
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ライフ
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={life}
+                  onChange={(e) => setLife(Number(e.target.value))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+              </div>
+            ) : (
+              // それ以外：コスト
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  コスト
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={cost}
+                  onChange={(e) => setCost(Number(e.target.value))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 パワー
@@ -362,20 +387,26 @@ export default function BlankCardModal({
                 className="w-full border rounded px-3 py-2 text-sm"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                カウンター
-              </label>
-              <select
-                value={counter}
-                onChange={(e) => setCounter(Number(e.target.value))}
-                className="w-full border rounded px-3 py-2 text-sm"
-              >
-                <option value={0}>なし</option>
-                <option value={1000}>+1000</option>
-                <option value={2000}>+2000</option>
-              </select>
-            </div>
+            {cardType !== 'LEADER' ? (
+              // LEADER以外：カウンター
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  カウンター
+                </label>
+                <select
+                  value={counter}
+                  onChange={(e) => setCounter(Number(e.target.value))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                >
+                  <option value={0}>なし</option>
+                  <option value={1000}>+1000</option>
+                  <option value={2000}>+2000</option>
+                </select>
+              </div>
+            ) : (
+              // LEADER：空欄（3列レイアウト維持）
+              <div />
+            )}
           </div>
           
           {/* 特徴 */}
