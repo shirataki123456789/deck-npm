@@ -56,15 +56,37 @@ export default function DeckMode() {
   useEffect(() => {
     const handleImportBlankCards = (e: CustomEvent<Card[]>) => {
       const newCards = e.detail;
-      setBlankCards(prev => [...prev, ...newCards]);
-      setAllCards(prev => [...prev, ...newCards]);
+      
+      setBlankCards(prev => {
+        // 既存のブランクカードIDとallCardsのIDを取得
+        const existingIds = new Set([
+          ...prev.map(c => c.card_id),
+          ...allCards.map(c => c.card_id),
+        ]);
+        
+        // 重複を除外
+        const uniqueNewCards = newCards.filter(card => !existingIds.has(card.card_id));
+        
+        if (uniqueNewCards.length < newCards.length) {
+          const skipped = newCards.length - uniqueNewCards.length;
+          console.log(`${skipped}件のブランクカードは既に存在するためスキップしました`);
+        }
+        
+        return [...prev, ...uniqueNewCards];
+      });
+      
+      setAllCards(prev => {
+        const existingIds = new Set(prev.map(c => c.card_id));
+        const uniqueNewCards = newCards.filter(card => !existingIds.has(card.card_id));
+        return [...prev, ...uniqueNewCards];
+      });
     };
     
     window.addEventListener('importBlankCards', handleImportBlankCards as EventListener);
     return () => {
       window.removeEventListener('importBlankCards', handleImportBlankCards as EventListener);
     };
-  }, []);
+  }, [allCards]);
   
   // 初回に全カードを取得してキャッシュ
   useEffect(() => {
