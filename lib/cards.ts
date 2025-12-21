@@ -71,6 +71,9 @@ function loadCSV(filePath: string, isParallel: boolean = false): Card[] {
     relax_column_count: true,
   });
   
+  // custom_cards.csvかどうかを判定
+  const isCustomCSV = filePath.includes('custom_cards.csv');
+  
   return records.map((row: any) => {
     const cardId = row['カードID'] || '';
     const colors = splitAndTrim(row['色'] || '');
@@ -78,7 +81,12 @@ function loadCSV(filePath: string, isParallel: boolean = false): Card[] {
     
     // 画像URLの決定
     let imageUrl = row['画像URL'] || '';
-    if (!imageUrl || imageUrl === '-') {
+    if (imageUrl === '-') {
+      imageUrl = '';
+    }
+    // custom_cards.csvの場合は画像URLが空ならそのまま空（ブランク風表示）
+    // それ以外のCSVは画像URLが空ならデフォルトURLを設定
+    if (!imageUrl && cardId && !isCustomCSV) {
       imageUrl = `https://www.onepiece-cardgame.com/images/cardlist/card/${cardId}.png`;
     }
     
