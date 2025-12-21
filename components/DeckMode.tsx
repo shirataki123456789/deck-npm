@@ -8,6 +8,7 @@ import DeckSidebar from './DeckSidebar';
 import DeckPreview from './DeckPreview';
 import LeaderSelect from './LeaderSelect';
 import BlankCardModal from './BlankCardModal';
+import CsvEditorMode from './CsvEditorMode';
 
 type DeckView = 'leader' | 'preview' | 'add_cards';
 
@@ -36,6 +37,7 @@ export default function DeckMode() {
   const [view, setView] = useState<DeckView>('leader');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
+  const [csvEditorOpen, setCsvEditorOpen] = useState(false);
   
   // カード検索関連
   const [allCards, setAllCards] = useState<Card[]>([]); // 全カードのキャッシュ
@@ -365,7 +367,16 @@ export default function DeckMode() {
   };
   
   return (
-    <div className="flex min-h-screen">
+    <>
+      {/* CSV編集モード */}
+      {csvEditorOpen && (
+        <CsvEditorMode
+          blankCards={blankCards}
+          onClose={() => setCsvEditorOpen(false)}
+        />
+      )}
+      
+      <div className="flex min-h-screen">
       {/* モバイル用サイドバーオーバーレイ */}
       {sidebarOpen && (
         <div
@@ -587,6 +598,7 @@ export default function DeckMode() {
             setEditingBlankCard(card);
             setShowBlankCardModal(true);
           }}
+          onOpenCsvEditor={() => setCsvEditorOpen(true)}
         />
       )}
       
@@ -606,5 +618,6 @@ export default function DeckMode() {
         availableAttributes={filterMeta?.attributes || []}
       />
     </div>
+    </>
   );
 }

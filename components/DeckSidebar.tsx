@@ -18,6 +18,7 @@ interface DeckSidebarProps {
   allCards?: Card[];
   blankCards?: Card[];
   onEditBlankCard?: (card: Card) => void;
+  onOpenCsvEditor?: () => void;
 }
 
 interface DeckCardInfo {
@@ -40,6 +41,7 @@ export default function DeckSidebar({
   allCards = [],
   blankCards = [],
   onEditBlankCard,
+  onOpenCsvEditor,
 }: DeckSidebarProps) {
   const [deckCardInfos, setDeckCardInfos] = useState<DeckCardInfo[]>([]);
   const [exportText, setExportText] = useState('');
@@ -445,6 +447,16 @@ export default function DeckSidebar({
                 </div>
               ))}
             </div>
+            
+            {/* CSV編集ボタン */}
+            {onOpenCsvEditor && (
+              <button
+                onClick={onOpenCsvEditor}
+                className="w-full mt-2 btn btn-sm bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                📄 CSVにエクスポート
+              </button>
+            )}
           </div>
         )}
         
