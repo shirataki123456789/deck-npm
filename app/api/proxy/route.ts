@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// 動的ルートとして強制
+export const dynamic = 'force-dynamic';
+
 // GET /api/proxy?url=... - 画像をプロキシ
 export async function GET(request: NextRequest) {
   try {
