@@ -30,6 +30,7 @@ interface EditableRow {
   id: string; // 一意なID
   data: Record<CsvColumnKey, string>;
   isNew?: boolean; // 新規追加された行
+  source?: string; // データの出所（'custom_cards.csv', 'blank', 'import', etc）
 }
 
 interface CsvEditorModeProps {
@@ -99,7 +100,7 @@ function parseCSV(csvText: string): EditableRow[] {
     });
     
     rows.push({
-      id: `csv-${i}-${Date.now()}`,
+      id: `csv-${i}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       data,
     });
   }
@@ -124,11 +125,17 @@ function rowsToCSV(rows: EditableRow[]): string {
   return [header, ...dataLines].join('\n');
 }
 
+// マージモード
+type MergeMode = 'overwrite' | 'skip';
+
 export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProps) {
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [mergeMode, setMergeMode] = useState<MergeMode>('skip');
+  const [showMergeOptions, setShowMergeOptions] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
   
   // 初期データ読み込み
   useEffect(() => {
@@ -143,7 +150,10 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
         let initialRows: EditableRow[] = [];
         
         if (data.csv) {
-          initialRows = parseCSV(data.csv);
+          initialRows = parseCSV(data.csv).map(row => ({
+            ...row,
+            source: 'custom_cards.csv',
+          }));
         }
         
         // ブランクカードを追加（重複チェック）
@@ -154,6 +164,7 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
               id: `blank-${card.card_id}-${Date.now()}`,
               data: cardToRowData(card),
               isNew: true,
+              source: 'ブランクカード',
             });
           }
         });
@@ -167,6 +178,7 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
           id: `blank-${card.card_id}-${Date.now()}`,
           data: cardToRowData(card),
           isNew: true,
+          source: 'ブランクカード',
         }));
         setRows(blankRows);
       }
@@ -196,6 +208,7 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
         block_icon: '', features: '', text: '', trigger: '', source: '', image_url: '',
       },
       isNew: true,
+      source: '手動追加',
     };
     setRows(prev => [...prev, newRow]);
     setSelectedRowId(newRow.id);
@@ -211,6 +224,89 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
     }
   }, [selectedRowId]);
   
+  // 行をマージ（重複処理）
+  const mergeRows = useCallback((newRows: EditableRow[], sourceName: string) => {
+    let addedCount = 0;
+    let skippedCount = 0;
+    let overwrittenCount = 0;
+    
+    setRows(prev => {
+      const result = [...prev];
+      
+      newRows.forEach(newRow => {
+        const existingIdx = result.findIndex(r => r.data.card_id === newRow.data.card_id);
+        
+        if (existingIdx >= 0) {
+          if (mergeMode === 'overwrite') {
+            result[existingIdx] = {
+              ...newRow,
+              id: result[existingIdx].id,
+              source: sourceName,
+            };
+            overwrittenCount++;
+          } else {
+            skippedCount++;
+          }
+        } else {
+          result.push({
+            ...newRow,
+            isNew: true,
+            source: sourceName,
+          });
+          addedCount++;
+        }
+      });
+      
+      return result;
+    });
+    
+    return { addedCount, skippedCount, overwrittenCount };
+  }, [mergeMode]);
+  
+  // CSVファイルインポート（複数対応）
+  const handleCsvImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    let totalAdded = 0;
+    let totalSkipped = 0;
+    let totalOverwritten = 0;
+    let processedCount = 0;
+    
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const csvText = event.target?.result as string;
+          const newRows = parseCSV(csvText);
+          const { addedCount, skippedCount, overwrittenCount } = mergeRows(newRows, file.name);
+          
+          totalAdded += addedCount;
+          totalSkipped += skippedCount;
+          totalOverwritten += overwrittenCount;
+          processedCount++;
+          
+          // 全ファイル処理完了後にアラート
+          if (processedCount === files.length) {
+            let message = `${files.length}ファイルを処理しました\n`;
+            message += `追加: ${totalAdded}件`;
+            if (totalOverwritten > 0) message += `\n上書き: ${totalOverwritten}件`;
+            if (totalSkipped > 0) message += `\nスキップ: ${totalSkipped}件`;
+            alert(message);
+          }
+        } catch (error) {
+          alert(`${file.name} の読み込みに失敗しました`);
+        }
+      };
+      reader.readAsText(file);
+    });
+    
+    // ファイル選択をリセット
+    if (csvInputRef.current) {
+      csvInputRef.current.value = '';
+    }
+  }, [mergeRows]);
+  
   // JSONインポート
   const handleJsonImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -222,20 +318,17 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
         const json = JSON.parse(event.target?.result as string);
         const cards: Card[] = Array.isArray(json) ? json : [json];
         
-        let addedCount = 0;
-        cards.forEach(card => {
-          const exists = rows.some(row => row.data.card_id === card.card_id);
-          if (!exists) {
-            setRows(prev => [...prev, {
-              id: `json-${card.card_id}-${Date.now()}`,
-              data: cardToRowData(card),
-              isNew: true,
-            }]);
-            addedCount++;
-          }
-        });
+        const newRows: EditableRow[] = cards.map(card => ({
+          id: `json-${card.card_id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          data: cardToRowData(card),
+        }));
         
-        alert(`${addedCount}件のカードをインポートしました`);
+        const { addedCount, skippedCount, overwrittenCount } = mergeRows(newRows, file.name);
+        
+        let message = `JSONをインポートしました\n追加: ${addedCount}件`;
+        if (overwrittenCount > 0) message += `\n上書き: ${overwrittenCount}件`;
+        if (skippedCount > 0) message += `\nスキップ: ${skippedCount}件`;
+        alert(message);
       } catch (error) {
         alert('JSONの読み込みに失敗しました');
       }
@@ -246,7 +339,7 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, [rows]);
+  }, [mergeRows]);
   
   // CSVダウンロード
   const handleDownload = useCallback(() => {
@@ -258,6 +351,25 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
     link.download = 'custom_cards.csv';
     link.click();
     URL.revokeObjectURL(url);
+  }, [rows]);
+  
+  // 重複削除
+  const removeDuplicates = useCallback(() => {
+    const seen = new Set<string>();
+    const uniqueRows = rows.filter(row => {
+      if (!row.data.card_id) return true; // IDがない行は保持
+      if (seen.has(row.data.card_id)) return false;
+      seen.add(row.data.card_id);
+      return true;
+    });
+    
+    const removedCount = rows.length - uniqueRows.length;
+    if (removedCount > 0) {
+      setRows(uniqueRows);
+      alert(`${removedCount}件の重複を削除しました`);
+    } else {
+      alert('重複はありませんでした');
+    }
   }, [rows]);
   
   // 選択された行のデータ
@@ -274,7 +386,7 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
   return (
     <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
       {/* ヘッダー */}
-      <div className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <div className="bg-white shadow-sm px-4 py-3 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-4">
           <button
             onClick={onClose}
@@ -285,9 +397,33 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
           <h1 className="text-lg font-bold">📝 CSV編集モード</h1>
           <span className="text-sm text-gray-500">({rows.length}件)</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* マージオプション */}
+          <div className="flex items-center gap-1 text-sm">
+            <span className="text-gray-600">重複時:</span>
+            <select
+              value={mergeMode}
+              onChange={(e) => setMergeMode(e.target.value as MergeMode)}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              <option value="skip">スキップ</option>
+              <option value="overwrite">上書き</option>
+            </select>
+          </div>
+          
           <label className="btn btn-secondary btn-sm cursor-pointer">
-            📄 JSONインポート
+            📄 CSVインポート
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv"
+              multiple
+              className="hidden"
+              onChange={handleCsvImport}
+            />
+          </label>
+          <label className="btn btn-secondary btn-sm cursor-pointer">
+            📋 JSONインポート
             <input
               ref={fileInputRef}
               type="file"
@@ -296,6 +432,12 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
               onChange={handleJsonImport}
             />
           </label>
+          <button
+            onClick={removeDuplicates}
+            className="btn btn-secondary btn-sm"
+          >
+            🔄 重複削除
+          </button>
           <button
             onClick={addRow}
             className="btn btn-secondary btn-sm"
@@ -323,6 +465,7 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
                 <th className="px-2 py-2 text-left border-b">カードID</th>
                 <th className="px-2 py-2 text-left border-b">タイプ</th>
                 <th className="px-2 py-2 text-left border-b">色</th>
+                <th className="px-2 py-2 text-left border-b">出所</th>
                 <th className="px-2 py-2 text-left border-b w-10"></th>
               </tr>
             </thead>
@@ -338,10 +481,13 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
                   <td className="px-2 py-1 border-b">
                     {row.isNew && <span className="text-green-600 text-xs">新</span>}
                   </td>
-                  <td className="px-2 py-1 border-b truncate max-w-[150px]">{row.data.name || '-'}</td>
+                  <td className="px-2 py-1 border-b truncate max-w-[120px]">{row.data.name || '-'}</td>
                   <td className="px-2 py-1 border-b">{row.data.card_id || '-'}</td>
                   <td className="px-2 py-1 border-b">{row.data.type || '-'}</td>
                   <td className="px-2 py-1 border-b">{row.data.color || '-'}</td>
+                  <td className="px-2 py-1 border-b text-xs text-gray-500 truncate max-w-[80px]">
+                    {row.source || '-'}
+                  </td>
                   <td className="px-2 py-1 border-b">
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteRow(row.id); }}
@@ -370,6 +516,11 @@ export default function CsvEditorMode({ blankCards, onClose }: CsvEditorModeProp
                 詳細編集
                 {selectedRow.isNew && (
                   <span className="ml-2 text-sm text-green-600 font-normal">（新規）</span>
+                )}
+                {selectedRow.source && (
+                  <span className="ml-2 text-sm text-gray-500 font-normal">
+                    出所: {selectedRow.source}
+                  </span>
                 )}
               </h2>
               

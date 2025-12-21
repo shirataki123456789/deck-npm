@@ -91,7 +91,8 @@ export default function ImageModal({ card, onClose }: ImageModalProps) {
   
   if (!card) return null;
   
-  const isBlankCard = !card.image_url && card.card_id.startsWith('BLANK-');
+  // 画像URLがない場合はブランクカード風に表示
+  const isBlankCard = !card.image_url;
   
   return (
     <div 
@@ -121,16 +122,12 @@ export default function ImageModal({ card, onClose }: ImageModalProps) {
           {/* カード画像またはブランクカード */}
           {isBlankCard ? (
             <BlankCardCanvasLarge card={card} />
-          ) : card.image_url ? (
+          ) : (
             <img
               src={card.image_url}
               alt={card.name}
               className="w-full rounded-lg shadow-2xl"
             />
-          ) : (
-            <div className="w-full aspect-[400/560] bg-gray-400 rounded-lg flex items-center justify-center">
-              <span className="text-6xl text-gray-600">?</span>
-            </div>
           )}
           
           {/* カード情報 */}

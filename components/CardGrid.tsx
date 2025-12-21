@@ -158,7 +158,8 @@ function CardItem({
   const maxCountDisplay = isUnlimited ? '∞' : '4';
   
   const isCompact = colsCount >= 5;
-  const isBlankCard = !card.image_url && card.card_id.startsWith('BLANK-');
+  // 画像URLがない場合はブランクカード風に表示（custom_cards.csvのカードも含む）
+  const isBlankCard = !card.image_url;
   
   const handleImageClick = () => {
     if (!showAddButton) return;
@@ -187,21 +188,11 @@ function CardItem({
             loading="lazy"
             decoding="async"
           />
-        ) : isBlankCard ? (
-          <BlankCardCanvas card={card} colsCount={colsCount} />
         ) : (
-          <div className="w-full aspect-[400/560] bg-gradient-to-br from-gray-300 to-gray-400 flex flex-col items-center justify-center text-gray-600">
-            <span className={isCompact ? 'text-2xl' : 'text-4xl'}>?</span>
-            {!isCompact && (
-              <>
-                <span className="text-xs mt-1 px-2 text-center truncate w-full">{card.name}</span>
-                <span className="text-[10px] mt-0.5">{card.card_id}</span>
-              </>
-            )}
-          </div>
+          <BlankCardCanvas card={card} colsCount={colsCount} />
         )}
         
-        {/* 拡大ボタン（画像またはブランクカード） */}
+        {/* 拡大ボタン */}
         {(card.image_url || isBlankCard) && (
           <button
             onClick={(e) => { e.stopPropagation(); onZoom?.(); }}
