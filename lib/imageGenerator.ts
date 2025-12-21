@@ -629,8 +629,7 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
   const isBlankLeader = leaderCard && !leaderUrl;
   
   if (isBlankLeader && leaderCard) {
-    // ブランクリーダーの場合、Canvas描画
-    // まず大きいサイズで描画してから縮小配置
+    // ブランクリーダーの場合、Canvas描画（全体表示＋QRコード）
     const tempCanvas = document.createElement('canvas');
     const tempWidth = 400;
     const tempHeight = 560;
@@ -645,24 +644,28 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
       if (leaderQrDataUrl) {
         try {
           const qrImg = await loadImage(leaderQrDataUrl);
-          const qrSize = tempWidth * 0.35;
-          const qrX = tempWidth - qrSize - tempWidth * 0.03;
-          const qrY = tempHeight - qrSize - tempHeight * 0.03;
+          const qrSize = tempWidth * 0.32;
+          const qrX = tempWidth - qrSize - tempWidth * 0.02;
+          const qrY = tempHeight - qrSize - tempHeight * 0.02;
           
+          // 白い背景
           tempCtx.fillStyle = 'white';
-          tempCtx.fillRect(qrX - 2, qrY - 2, qrSize + 4, qrSize + 4);
+          tempCtx.fillRect(qrX - 3, qrY - 3, qrSize + 6, qrSize + 6);
           tempCtx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
         } catch (e) {
           console.warn('Failed to draw QR on blank leader:', e);
         }
       }
       
-      // メインCanvasに上半分をクロップして描画
-      const srcHeight = tempHeight / 2;
+      // メインCanvasに全体を描画（上部エリアにフィット）
+      // アスペクト比を維持して配置
+      const targetHeight = leaderCroppedHeight;
+      const targetWidth = Math.floor(targetHeight * (tempWidth / tempHeight));
+      
       ctx.drawImage(
         tempCanvas,
-        0, 0, tempWidth, srcHeight,
-        GAP, 0, leaderCroppedWidth, leaderCroppedHeight
+        0, 0, tempWidth, tempHeight,
+        GAP, 0, targetWidth, targetHeight
       );
     }
   } else if (leaderUrl) {
