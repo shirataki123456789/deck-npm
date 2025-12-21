@@ -395,13 +395,13 @@ export default function DeckMode() {
   return (
     <>
       {/* CSV編集モード */}
-      {csvEditorOpen && (
+      {csvEditorOpen ? (
         <CsvEditorMode
           blankCards={blankCards}
           onClose={() => setCsvEditorOpen(false)}
         />
-      )}
-      
+      ) : (
+      <>
       <div className="flex min-h-screen">
       {/* モバイル用サイドバーオーバーレイ */}
       {sidebarOpen && (
@@ -664,6 +664,8 @@ export default function DeckMode() {
         availableAttributes={filterMeta?.attributes || []}
       />
     </div>
+    </>
+    )}
     </>
   );
 }
