@@ -272,15 +272,13 @@ export default function BlankCardModal({
               タイプ
             </label>
             <div className="flex gap-2 flex-wrap">
-              {['LEADER', 'CHARACTER', 'EVENT', 'STAGE'].map(type => (
+              {['CHARACTER', 'EVENT', 'STAGE'].map(type => (
                 <button
                   key={type}
                   onClick={() => setCardType(type)}
                   className={`flex-1 min-w-[70px] py-2 rounded border text-sm transition-colors ${
                     cardType === type
-                      ? type === 'LEADER' 
-                        ? 'bg-yellow-500 text-white border-yellow-500'
-                        : 'bg-green-600 text-white border-green-600'
+                      ? 'bg-green-600 text-white border-green-600'
                       : 'bg-white border-gray-300 hover:bg-gray-50'
                   }`}
                 >

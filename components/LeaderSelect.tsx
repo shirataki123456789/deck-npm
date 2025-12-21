@@ -49,9 +49,21 @@ interface LeaderSelectProps {
   onSelect: (card: Card) => void;
   onImport: (text: string) => void;
   blankLeaders?: Card[]; // ブランクカードのリーダー
+  onCreateBlankLeader?: (card: Card) => void; // ブランクリーダー作成
+  onEditBlankLeader?: (card: Card) => void; // ブランクリーダー編集
+  onDeleteBlankLeader?: (cardId: string) => void; // ブランクリーダー削除
+  existingCardIds?: string[]; // 既存のカードID（重複チェック用）
 }
 
-export default function LeaderSelect({ onSelect, onImport, blankLeaders = [] }: LeaderSelectProps) {
+export default function LeaderSelect({ 
+  onSelect, 
+  onImport, 
+  blankLeaders = [],
+  onCreateBlankLeader,
+  onEditBlankLeader,
+  onDeleteBlankLeader,
+  existingCardIds = [],
+}: LeaderSelectProps) {
   const [leaders, setLeaders] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [parallelMode, setParallelMode] = useState<'normal' | 'parallel' | 'both'>('normal');
@@ -59,6 +71,8 @@ export default function LeaderSelect({ onSelect, onImport, blankLeaders = [] }: 
   const [showImport, setShowImport] = useState(false);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [colsCount, setColsCount] = useState(4);
+  const [showBlankLeaderModal, setShowBlankLeaderModal] = useState(false);
+  const [editingLeader, setEditingLeader] = useState<Card | null>(null);
   
   // リーダー一覧を取得
   const fetchLeaders = useCallback(async () => {
@@ -407,6 +421,72 @@ export default function LeaderSelect({ onSelect, onImport, blankLeaders = [] }: 
         )}
       </div>
       
+      {/* ブランクリーダー作成セクション */}
+      {onCreateBlankLeader && (
+        <div className="bg-purple-50 rounded-lg shadow p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-purple-800">📝 ブランクリーダー</h3>
+              <p className="text-sm text-purple-600">未発表カードやオリジナルリーダーを作成</p>
+            </div>
+            <button
+              onClick={() => {
+                setEditingLeader(null);
+                setShowBlankLeaderModal(true);
+              }}
+              className="btn bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              ➕ 作成
+            </button>
+          </div>
+          
+          {/* 作成済みブランクリーダー一覧 */}
+          {blankLeaders.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm font-medium text-purple-700">作成済み ({blankLeaders.length}件)</p>
+              <div className="flex flex-wrap gap-2">
+                {blankLeaders.map(leader => (
+                  <div
+                    key={leader.card_id}
+                    className="flex items-center gap-2 bg-white rounded px-2 py-1 text-sm"
+                  >
+                    <span className="font-medium">{leader.name}</span>
+                    <div className="flex gap-0.5">
+                      {leader.color.map(c => (
+                        <span key={c} className={`color-badge color-badge-${c} text-xs`}>{c}</span>
+                      ))}
+                    </div>
+                    {onEditBlankLeader && (
+                      <button
+                        onClick={() => {
+                          setEditingLeader(leader);
+                          setShowBlankLeaderModal(true);
+                        }}
+                        className="text-purple-600 hover:text-purple-800"
+                      >
+                        ✏️
+                      </button>
+                    )}
+                    {onDeleteBlankLeader && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`「${leader.name}」を削除しますか？`)) {
+                            onDeleteBlankLeader(leader.card_id);
+                          }
+                        }}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        🗑
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      
       {/* フィルター・表示設定 */}
       <div className="bg-white rounded-lg shadow p-4 mb-4">
         {/* パラレルモード選択 */}
@@ -548,6 +628,279 @@ export default function LeaderSelect({ onSelect, onImport, blankLeaders = [] }: 
           })}
         </div>
       )}
+      
+      {/* ブランクリーダー作成/編集モーダル */}
+      {showBlankLeaderModal && onCreateBlankLeader && (
+        <BlankLeaderModal
+          isOpen={showBlankLeaderModal}
+          onClose={() => {
+            setShowBlankLeaderModal(false);
+            setEditingLeader(null);
+          }}
+          onSubmit={(card) => {
+            if (editingLeader && onEditBlankLeader) {
+              onEditBlankLeader(card);
+            } else {
+              onCreateBlankLeader(card);
+            }
+            setShowBlankLeaderModal(false);
+            setEditingLeader(null);
+          }}
+          editCard={editingLeader}
+          existingIds={existingCardIds}
+        />
+      )}
+    </div>
+  );
+}
+
+// ブランクリーダー作成モーダル
+interface BlankLeaderModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (card: Card) => void;
+  editCard?: Card | null;
+  existingIds: string[];
+}
+
+let blankLeaderCounter = Date.now() % 10000;
+const generateBlankLeaderId = () => {
+  blankLeaderCounter++;
+  return `BLANK-L${String(blankLeaderCounter).padStart(3, '0')}`;
+};
+
+function BlankLeaderModal({ isOpen, onClose, onSubmit, editCard, existingIds }: BlankLeaderModalProps) {
+  const [cardId, setCardId] = useState('');
+  const [name, setName] = useState('');
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [life, setLife] = useState(5);
+  const [power, setPower] = useState(5000);
+  const [attribute, setAttribute] = useState('');
+  const [features, setFeatures] = useState('');
+  const [effectText, setEffectText] = useState('');
+  const [error, setError] = useState('');
+  
+  const isEditMode = !!editCard;
+  
+  useEffect(() => {
+    if (editCard) {
+      setCardId(editCard.card_id);
+      setName(editCard.name);
+      setSelectedColors(editCard.color);
+      setLife(editCard.block_icon ? parseInt(editCard.block_icon) || 5 : 5);
+      setPower(editCard.power);
+      setAttribute(editCard.attribute || '');
+      setFeatures(editCard.features.join('/'));
+      setEffectText(editCard.text || '');
+      setError('');
+    } else {
+      resetForm();
+    }
+  }, [editCard, isOpen]);
+  
+  const resetForm = () => {
+    setCardId('');
+    setName('');
+    setSelectedColors([]);
+    setLife(5);
+    setPower(5000);
+    setAttribute('');
+    setFeatures('');
+    setEffectText('');
+    setError('');
+  };
+  
+  const toggleColor = (color: string) => {
+    setSelectedColors(prev =>
+      prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]
+    );
+  };
+  
+  const handleSubmit = () => {
+    if (!name.trim()) {
+      setError('カード名を入力してください');
+      return;
+    }
+    if (selectedColors.length === 0) {
+      setError('色を1つ以上選択してください');
+      return;
+    }
+    
+    let finalId = isEditMode ? editCard!.card_id : (cardId.trim() || generateBlankLeaderId());
+    
+    if (!isEditMode && cardId.trim() && existingIds.includes(finalId)) {
+      setError('このカードIDは既に存在します');
+      return;
+    }
+    
+    const card: Card = {
+      name: name.trim(),
+      card_id: finalId,
+      card_code: '',
+      type: 'LEADER',
+      rarity: 'L',
+      cost: -1,
+      attribute: attribute,
+      power: power,
+      counter: 0,
+      color: selectedColors,
+      block_icon: String(life),
+      features: features.split(/[\/,]/).map(f => f.trim()).filter(f => f),
+      text: effectText,
+      trigger: '',
+      source: 'ブランクリーダー（手動追加）',
+      image_url: '',
+      is_parallel: false,
+      series_id: 'BLANK',
+    };
+    
+    onSubmit(card);
+    resetForm();
+  };
+  
+  if (!isOpen) return null;
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold">
+              {isEditMode ? '📝 ブランクリーダー編集' : '📝 ブランクリーダー作成'}
+            </h3>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+          </div>
+          
+          {error && (
+            <div className="mb-4 p-2 bg-red-100 text-red-700 rounded text-sm">{error}</div>
+          )}
+          
+          <div className="space-y-4">
+            {/* カードID */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                カードID（空欄で自動生成）
+              </label>
+              <input
+                type="text"
+                value={cardId}
+                onChange={(e) => setCardId(e.target.value)}
+                disabled={isEditMode}
+                placeholder="例: OP10-001"
+                className="w-full border rounded px-3 py-2 text-sm disabled:bg-gray-100"
+              />
+            </div>
+            
+            {/* カード名 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                カード名 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="リーダー名"
+                className="w-full border rounded px-3 py-2 text-sm"
+              />
+            </div>
+            
+            {/* 色 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                色 <span className="text-red-500">*</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {COLOR_ORDER.map(color => (
+                  <button
+                    key={color}
+                    onClick={() => toggleColor(color)}
+                    className={`px-3 py-1.5 rounded border text-sm transition-colors ${
+                      selectedColors.includes(color)
+                        ? `color-badge-${color}`
+                        : 'bg-white border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {color}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* ライフ・パワー */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ライフ</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={life}
+                  onChange={(e) => setLife(Number(e.target.value))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">パワー</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="10000"
+                  step="1000"
+                  value={power}
+                  onChange={(e) => setPower(Number(e.target.value))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            
+            {/* 属性 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">属性</label>
+              <input
+                type="text"
+                value={attribute}
+                onChange={(e) => setAttribute(e.target.value)}
+                placeholder="斬/打/特 など"
+                className="w-full border rounded px-3 py-2 text-sm"
+              />
+            </div>
+            
+            {/* 特徴 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">特徴（/区切り）</label>
+              <input
+                type="text"
+                value={features}
+                onChange={(e) => setFeatures(e.target.value)}
+                placeholder="麦わらの一味/超新星 など"
+                className="w-full border rounded px-3 py-2 text-sm"
+              />
+            </div>
+            
+            {/* 効果テキスト */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">効果テキスト</label>
+              <textarea
+                value={effectText}
+                onChange={(e) => setEffectText(e.target.value)}
+                placeholder="効果テキスト"
+                rows={3}
+                className="w-full border rounded px-3 py-2 text-sm resize-y"
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-2 mt-6">
+            <button onClick={onClose} className="flex-1 btn btn-secondary">
+              キャンセル
+            </button>
+            <button onClick={handleSubmit} className="flex-1 btn bg-purple-600 hover:bg-purple-700 text-white">
+              {isEditMode ? '更新' : '作成'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

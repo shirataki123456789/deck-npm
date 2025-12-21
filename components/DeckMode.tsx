@@ -427,6 +427,19 @@ export default function DeckMode() {
             onSelect={handleSelectLeader}
             onImport={handleImportDeck}
             blankLeaders={blankCards.filter(c => c.type === 'LEADER')}
+            onCreateBlankLeader={(card) => {
+              setBlankCards(prev => [...prev, card]);
+              setAllCards(prev => [...prev, card]);
+            }}
+            onEditBlankLeader={(card) => {
+              setBlankCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
+              setAllCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
+            }}
+            onDeleteBlankLeader={(cardId) => {
+              setBlankCards(prev => prev.filter(c => c.card_id !== cardId));
+              setAllCards(prev => prev.filter(c => c.card_id !== cardId));
+            }}
+            existingCardIds={[...allCards.map(c => c.card_id), ...blankCards.map(c => c.card_id)]}
           />
         )}
         
