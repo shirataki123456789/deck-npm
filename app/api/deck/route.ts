@@ -3,6 +3,9 @@ import { exportDeckText, parseDeckText, getSortedDeckCards } from '@/lib/deck';
 import { loadAllCards, getCardById, sortCards, computeSortKey } from '@/lib/cards';
 import { Deck } from '@/lib/types';
 
+// 動的ルートとして強制
+export const dynamic = 'force-dynamic';
+
 // POST /api/deck - デッキ操作（export/import/sort）
 export async function POST(request: NextRequest) {
   try {
