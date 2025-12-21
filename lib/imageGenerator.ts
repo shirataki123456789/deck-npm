@@ -129,6 +129,8 @@ function drawBlankCardPlaceholder(
   width: number,
   height: number
 ) {
+  const isLeader = card.type === 'LEADER';
+  
   // 背景グラデーション（カードの色に基づく）
   const cardColors = card.color.map(c => COLOR_HEX[c] || '#888888');
   if (cardColors.length === 0) cardColors.push('#888888');
@@ -154,255 +156,339 @@ function drawBlankCardPlaceholder(
   ctx.fillStyle = gradient;
   ctx.fillRect(x, y, width, height);
   
-  // イラストエリア風オーバーレイ
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-  ctx.fillRect(x, y + height * 0.12, width, height * 0.42);
-  
-  // === 効果テキストエリア背景 (左右端まで拡大: x=0.02~0.98, y=0.576~0.752) ===
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  const effectX = x + width * 0.02;
-  const effectY = y + height * 0.576;
-  const effectW = width * 0.96;
-  const effectH = height * 0.176;
-  ctx.fillRect(effectX, effectY, effectW, effectH);
-  
-  // === 下部バー (y=0.83~1.0) ===
-  const bottomBarY = y + height * 0.83;
-  const bottomBarH = height * 0.17;
-  ctx.fillStyle = primaryColor;
-  ctx.fillRect(x, bottomBarY, width, bottomBarH);
-  ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.08)';
-  ctx.fillRect(x, bottomBarY, width, bottomBarH);
-  
-  // === 枠線 ===
-  ctx.strokeStyle = strokeOnColor;
-  ctx.lineWidth = Math.max(1, width * 0.015);
-  ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
-  
-  const isLeader = card.type === 'LEADER';
-  
-  // === 左上: コスト または ライフ (red: x=0.02, y=0.014, w=0.147, h=0.103) ===
-  const costX = x + width * 0.02;
-  const costY = y + height * 0.014;
-  const costW = width * 0.147;
-  const costH = height * 0.103;
-  const costCenterX = costX + costW / 2;
-  const costCenterY = costY + costH / 2;
-  const costRadius = Math.min(costW, costH) / 2;
-  
-  ctx.beginPath();
-  ctx.arc(costCenterX, costCenterY, costRadius, 0, Math.PI * 2);
-  ctx.fillStyle = isLeader ? '#FFD700' : primaryColor; // LEADERは金色
-  ctx.fill();
-  ctx.strokeStyle = strokeOnColor;
-  ctx.lineWidth = Math.max(1, width * 0.012);
-  ctx.stroke();
-  
-  ctx.fillStyle = isLeader ? '#000000' : textOnColor;
-  ctx.font = `bold ${Math.round(costRadius * 1.1)}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  
-  // LEADERの場合はblock_iconからライフを取得、それ以外はコスト
-  const displayValue = isLeader 
-    ? (card.block_icon || '5')  // ライフ（block_iconに保存）
-    : String(card.cost >= 0 ? card.cost : '-');
-  ctx.fillText(displayValue, costCenterX, costCenterY);
-  
-  // === 右上: パワー (yellow: x=0.663~0.865, y=0.025~0.075) ===
-  ctx.fillStyle = textOnColor;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'top';
-  const powerFontSize = Math.round(height * 0.042);
-  ctx.font = `bold ${powerFontSize}px sans-serif`;
-  const powerX = x + width * 0.86;
-  const powerY = y + height * 0.028;
-  const powerText = card.power > 0 ? String(card.power) : '-';
-  ctx.fillText(powerText, powerX, powerY);
-  
-  // === 右上: 属性 (green: x=0.873~0.962, y=0.019~0.075) ===
-  if (card.attribute) {
-    const attrFontSize = Math.round(height * 0.032);
-    ctx.font = `bold ${attrFontSize}px sans-serif`;
-    ctx.fillStyle = textOnColor;
-    ctx.fillText(card.attribute, x + width * 0.96, y + height * 0.022);
-  }
-  
-  // === 左側: カウンター縦書き (black: x=0.02~0.05, y=0.26~0.50) ===
-  // LEADERの場合はカウンター非表示、代わりにLEADERタグ表示
   if (isLeader) {
-    // LEADERタグ
-    ctx.save();
-    const tagX = x + width * 0.035;
-    const tagY = y + height * 0.38;
+    // === リーダーカード用レイアウト ===
     
-    ctx.translate(tagX, tagY);
-    ctx.rotate(-Math.PI / 2);
+    // 金色の枠線
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = Math.max(2, width * 0.02);
+    ctx.strokeRect(x + 2, y + 2, width - 4, height - 4);
     
+    // イラストエリア
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillRect(x, y + height * 0.12, width, height * 0.40);
+    
+    // 上部バー（LEADER表示用）
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(x, y, width, height * 0.10);
+    
+    // LEADERテキスト（上部中央）
     ctx.fillStyle = '#FFD700';
-    ctx.font = `bold ${Math.round(height * 0.028)}px sans-serif`;
+    ctx.font = `bold ${Math.round(height * 0.05)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('LEADER', 0, 0);
-    ctx.restore();
-  } else if (card.counter > 0) {
-    ctx.save();
-    // 縦書き位置（左側、コストの下〜効果エリアの上）
-    const counterX = x + width * 0.035;
-    const counterY = y + height * 0.38; // y=0.26〜0.50の中央付近
+    ctx.fillText('LEADER', x + width / 2, y + height * 0.05);
     
-    ctx.translate(counterX, counterY);
-    ctx.rotate(-Math.PI / 2); // 90度回転（縦書き）
+    // ライフ（左上、金色の丸）
+    const lifeX = x + width * 0.12;
+    const lifeY = y + height * 0.18;
+    const lifeRadius = Math.min(width, height) * 0.08;
     
+    ctx.beginPath();
+    ctx.arc(lifeX, lifeY, lifeRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFD700';
+    ctx.fill();
+    ctx.strokeStyle = '#B8860B';
+    ctx.lineWidth = Math.max(1, width * 0.01);
+    ctx.stroke();
+    
+    ctx.fillStyle = '#000000';
+    ctx.font = `bold ${Math.round(lifeRadius * 1.2)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(card.block_icon || '5', lifeX, lifeY);
+    
+    // 「LIFE」ラベル
     ctx.fillStyle = textOnColor;
-    ctx.font = `bold ${Math.round(height * 0.035)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`+${card.counter}`, 0, 0);
-    ctx.restore();
-  }
-  
-  // === 効果テキスト (拡大されたcyan領域内、動的フォントサイズ) ===
-  if (card.text) {
-    ctx.fillStyle = 'white';
-    ctx.textAlign = 'left';
+    ctx.font = `bold ${Math.round(height * 0.022)}px sans-serif`;
+    ctx.fillText('LIFE', lifeX, lifeY + lifeRadius + height * 0.02);
+    
+    // パワー（右上）
+    ctx.fillStyle = textOnColor;
+    ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
+    ctx.font = `bold ${Math.round(height * 0.045)}px sans-serif`;
+    ctx.fillText(String(card.power || 5000), x + width * 0.92, y + height * 0.12);
     
-    const textPadding = width * 0.01;
-    const textX = effectX + textPadding;
-    const maxWidth = effectW - textPadding * 2;
-    const availableHeight = effectH - height * 0.01;
-    
-    // テキストの長さに応じてフォントサイズを動的に調整
-    const textLength = card.text.length;
-    let baseFontSize: number;
-    let lineHeightRatio: number;
-    
-    if (textLength <= 30) {
-      // 短いテキスト: 通常サイズ
-      baseFontSize = height * 0.024;
-      lineHeightRatio = 1.3;
-    } else if (textLength <= 60) {
-      // 中程度のテキスト: 少し小さく
-      baseFontSize = height * 0.021;
-      lineHeightRatio = 1.25;
-    } else if (textLength <= 100) {
-      // 長いテキスト: さらに小さく
-      baseFontSize = height * 0.018;
-      lineHeightRatio = 1.2;
-    } else if (textLength <= 150) {
-      // 非常に長いテキスト: かなり小さく
-      baseFontSize = height * 0.015;
-      lineHeightRatio = 1.15;
-    } else {
-      // 極めて長いテキスト: 最小サイズ
-      baseFontSize = height * 0.013;
-      lineHeightRatio = 1.1;
+    // 属性（パワーの下）
+    if (card.attribute) {
+      ctx.font = `bold ${Math.round(height * 0.028)}px sans-serif`;
+      ctx.fillText(card.attribute, x + width * 0.92, y + height * 0.17);
     }
     
-    const textFontSize = Math.max(1, Math.round(baseFontSize));
-    ctx.font = `${textFontSize}px sans-serif`;
-    const lineHeight = textFontSize * lineHeightRatio;
-    const maxLines = Math.floor(availableHeight / lineHeight);
-    const textY = effectY + height * 0.005;
+    // 効果テキストエリア
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    const effectX = x + width * 0.02;
+    const effectY = y + height * 0.54;
+    const effectW = width * 0.96;
+    const effectH = height * 0.20;
+    ctx.fillRect(effectX, effectY, effectW, effectH);
     
-    const paragraphs = card.text.split('\n');
-    const allLines: string[] = [];
+    // 効果テキスト
+    if (card.text) {
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const fontSize = Math.round(height * 0.022);
+      ctx.font = `${fontSize}px sans-serif`;
+      
+      const textPadding = width * 0.02;
+      const maxWidth = effectW - textPadding * 2;
+      const lines = wrapText(ctx, card.text, maxWidth);
+      const lineHeight = fontSize * 1.2;
+      
+      lines.slice(0, 4).forEach((line, i) => {
+        ctx.fillText(line, effectX + textPadding, effectY + textPadding + i * lineHeight);
+      });
+    }
     
-    for (const paragraph of paragraphs) {
-      if (allLines.length >= maxLines) break;
-      let line = '';
-      for (const char of paragraph) {
-        const testLine = line + char;
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && line !== '') {
+    // 下部バー
+    ctx.fillStyle = primaryColor;
+    ctx.fillRect(x, y + height * 0.76, width, height * 0.24);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fillRect(x, y + height * 0.76, width, height * 0.24);
+    
+    // カード名（下部）
+    ctx.fillStyle = textOnColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const nameFontSize = Math.round(height * 0.038);
+    ctx.font = `bold ${nameFontSize}px sans-serif`;
+    ctx.fillText(card.name.slice(0, 15), x + width / 2, y + height * 0.82);
+    
+    // 特徴（最下部）
+    if (card.features.length > 0) {
+      ctx.font = `${Math.round(height * 0.022)}px sans-serif`;
+      ctx.fillText(card.features.slice(0, 3).join(' / '), x + width / 2, y + height * 0.90);
+    }
+    
+    // カードID
+    ctx.font = `${Math.round(height * 0.018)}px sans-serif`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillText(card.card_id, x + width / 2, y + height * 0.96);
+    
+  } else {
+    // === 通常カード用レイアウト（既存のまま） ===
+    
+    // イラストエリア風オーバーレイ
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.fillRect(x, y + height * 0.12, width, height * 0.42);
+    
+    // 効果テキストエリア背景
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    const effectX = x + width * 0.02;
+    const effectY = y + height * 0.576;
+    const effectW = width * 0.96;
+    const effectH = height * 0.176;
+    ctx.fillRect(effectX, effectY, effectW, effectH);
+    
+    // 下部バー
+    const bottomBarY = y + height * 0.83;
+    const bottomBarH = height * 0.17;
+    ctx.fillStyle = primaryColor;
+    ctx.fillRect(x, bottomBarY, width, bottomBarH);
+    ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.08)';
+    ctx.fillRect(x, bottomBarY, width, bottomBarH);
+    
+    // 枠線
+    ctx.strokeStyle = strokeOnColor;
+    ctx.lineWidth = Math.max(1, width * 0.015);
+    ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
+    
+    // 左上: コスト
+    const costX = x + width * 0.02;
+    const costY = y + height * 0.014;
+    const costW = width * 0.147;
+    const costH = height * 0.103;
+    const costCenterX = costX + costW / 2;
+    const costCenterY = costY + costH / 2;
+    const costRadius = Math.min(costW, costH) / 2;
+    
+    ctx.beginPath();
+    ctx.arc(costCenterX, costCenterY, costRadius, 0, Math.PI * 2);
+    ctx.fillStyle = primaryColor;
+    ctx.fill();
+    ctx.strokeStyle = strokeOnColor;
+    ctx.lineWidth = Math.max(1, width * 0.012);
+    ctx.stroke();
+    
+    ctx.fillStyle = textOnColor;
+    ctx.font = `bold ${Math.round(costRadius * 1.1)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(card.cost >= 0 ? card.cost : '-'), costCenterX, costCenterY);
+    
+    // 右上: パワー
+    ctx.fillStyle = textOnColor;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    const powerFontSize = Math.round(height * 0.042);
+    ctx.font = `bold ${powerFontSize}px sans-serif`;
+    const powerX = x + width * 0.86;
+    const powerY = y + height * 0.028;
+    const powerText = card.power > 0 ? String(card.power) : '-';
+    ctx.fillText(powerText, powerX, powerY);
+    
+    // 右上: 属性
+    if (card.attribute) {
+      const attrFontSize = Math.round(height * 0.032);
+      ctx.font = `bold ${attrFontSize}px sans-serif`;
+      ctx.fillStyle = textOnColor;
+      ctx.fillText(card.attribute, x + width * 0.96, y + height * 0.022);
+    }
+    
+    // 左側: カウンター縦書き
+    if (card.counter > 0) {
+      ctx.save();
+      const counterX = x + width * 0.035;
+      const counterY = y + height * 0.38;
+      
+      ctx.translate(counterX, counterY);
+      ctx.rotate(-Math.PI / 2);
+      
+      ctx.fillStyle = textOnColor;
+      ctx.font = `bold ${Math.round(height * 0.035)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`+${card.counter}`, 0, 0);
+      ctx.restore();
+    }
+  
+    // === 効果テキスト (拡大されたcyan領域内、動的フォントサイズ) ===
+    if (card.text) {
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      
+      const textPadding = width * 0.01;
+      const textX = effectX + textPadding;
+      const maxWidth = effectW - textPadding * 2;
+      const availableHeight = effectH - height * 0.01;
+      
+      // テキストの長さに応じてフォントサイズを動的に調整
+      const textLength = card.text.length;
+      let baseFontSize: number;
+      let lineHeightRatio: number;
+      
+      if (textLength <= 30) {
+        baseFontSize = height * 0.024;
+        lineHeightRatio = 1.3;
+      } else if (textLength <= 60) {
+        baseFontSize = height * 0.021;
+        lineHeightRatio = 1.25;
+      } else if (textLength <= 100) {
+        baseFontSize = height * 0.018;
+        lineHeightRatio = 1.2;
+      } else if (textLength <= 150) {
+        baseFontSize = height * 0.015;
+        lineHeightRatio = 1.15;
+      } else {
+        baseFontSize = height * 0.013;
+        lineHeightRatio = 1.1;
+      }
+      
+      const textFontSize = Math.max(1, Math.round(baseFontSize));
+      ctx.font = `${textFontSize}px sans-serif`;
+      const lineHeight = textFontSize * lineHeightRatio;
+      const maxLines = Math.floor(availableHeight / lineHeight);
+      const textY = effectY + height * 0.005;
+      
+      const paragraphs = card.text.split('\n');
+      const allLines: string[] = [];
+      
+      for (const paragraph of paragraphs) {
+        if (allLines.length >= maxLines) break;
+        let line = '';
+        for (const char of paragraph) {
+          const testLine = line + char;
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > maxWidth && line !== '') {
+            allLines.push(line);
+            line = char;
+            if (allLines.length >= maxLines) break;
+          } else {
+            line = testLine;
+          }
+        }
+        if (line && allLines.length < maxLines) {
           allLines.push(line);
-          line = char;
-          if (allLines.length >= maxLines) break;
-        } else {
-          line = testLine;
         }
       }
-      if (line && allLines.length < maxLines) {
-        allLines.push(line);
+      
+      if (allLines.length === maxLines && card.text.length > allLines.join('').length) {
+        const lastLine = allLines[maxLines - 1];
+        if (lastLine.length > 1) {
+          allLines[maxLines - 1] = lastLine.slice(0, -1) + '…';
+        }
       }
+      
+      allLines.forEach((l, i) => {
+        ctx.fillText(l, textX, textY + i * lineHeight);
+      });
     }
     
-    // テキストが収まりきらない場合は省略記号
-    if (allLines.length === maxLines && card.text.length > allLines.join('').length) {
-      const lastLine = allLines[maxLines - 1];
-      if (lastLine.length > 1) {
-        allLines[maxLines - 1] = lastLine.slice(0, -1) + '…';
-      }
+    // === トリガー (効果テキストエリアの下、下部バーの上) ===
+    if (card.trigger) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      const triggerFontSize = Math.round(height * 0.022);
+      ctx.font = `${triggerFontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const triggerY = y + height * 0.79;
+      const triggerText = `【トリガー】${card.trigger.slice(0, 14)}`;
+      ctx.fillText(triggerText, x + width / 2, triggerY);
     }
     
-    allLines.forEach((l, i) => {
-      ctx.fillText(l, textX, textY + i * lineHeight);
-    });
-  }
-  
-  // === トリガー (効果テキストエリアの下、下部バーの上) ===
-  if (card.trigger) {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    const triggerFontSize = Math.round(height * 0.022);
-    ctx.font = `${triggerFontSize}px sans-serif`;
+    // === 下部バー内 ===
+    ctx.fillStyle = textOnColor;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const triggerY = y + height * 0.79;
-    const triggerText = `【トリガー】${card.trigger.slice(0, 14)}`;
-    ctx.fillText(triggerText, x + width / 2, triggerY);
-  }
-  
-  // === 下部バー内 ===
-  ctx.fillStyle = textOnColor;
-  ctx.textAlign = 'center';
-  
-  // タイプ (magenta: y=0.833~0.854)
-  const typeFontSize = Math.round(height * 0.020);
-  ctx.font = `${typeFontSize}px sans-serif`;
-  ctx.textBaseline = 'middle';
-  const typeY = y + height * 0.844;
-  const typeText = card.type === 'CHARACTER' ? 'CHARACTER' : card.type === 'EVENT' ? 'EVENT' : 'STAGE';
-  ctx.fillText(typeText, x + width / 2, typeY);
-  
-  // カード名 (blue: y=0.878~0.926)
-  const nameFontSize = Math.round(height * 0.036);
-  ctx.font = `bold ${nameFontSize}px sans-serif`;
-  const nameY = y + height * 0.902;
-  const maxNameWidth = width * 0.9;
-  let name = card.name;
-  while (ctx.measureText(name).width > maxNameWidth && name.length > 1) {
-    name = name.slice(0, -1);
-  }
-  if (name !== card.name) name += '…';
-  ctx.fillText(name, x + width / 2, nameY);
-  
-  // 特徴 (orange: y=0.927~0.957)
-  if (card.features.length > 0) {
-    const featureFontSize = Math.round(height * 0.020);
-    ctx.font = `${featureFontSize}px sans-serif`;
-    const featureY = y + height * 0.942;
-    const featuresText = card.features.join(' / ');
-    const maxFeaturesWidth = width * 0.88;
     
-    if (ctx.measureText(featuresText).width <= maxFeaturesWidth) {
-      ctx.fillText(featuresText, x + width / 2, featureY);
-    } else {
-      // 2行に分割
-      const midPoint = Math.ceil(card.features.length / 2);
-      const line1 = card.features.slice(0, midPoint).join(' / ');
-      const line2 = card.features.slice(midPoint).join(' / ');
-      ctx.fillText(line1, x + width / 2, featureY - featureFontSize * 0.55);
-      ctx.fillText(line2, x + width / 2, featureY + featureFontSize * 0.55);
+    // タイプ
+    const typeFontSize = Math.round(height * 0.020);
+    ctx.font = `${typeFontSize}px sans-serif`;
+    ctx.textBaseline = 'middle';
+    const typeY = y + height * 0.844;
+    const typeText = card.type === 'CHARACTER' ? 'CHARACTER' : card.type === 'EVENT' ? 'EVENT' : 'STAGE';
+    ctx.fillText(typeText, x + width / 2, typeY);
+    
+    // カード名
+    const nameFontSize = Math.round(height * 0.036);
+    ctx.font = `bold ${nameFontSize}px sans-serif`;
+    const nameY = y + height * 0.902;
+    const maxNameWidth = width * 0.9;
+    let name = card.name;
+    while (ctx.measureText(name).width > maxNameWidth && name.length > 1) {
+      name = name.slice(0, -1);
     }
-  }
-  
-  // カードID（左下）
-  const idFontSize = Math.round(height * 0.016);
-  ctx.font = `${idFontSize}px sans-serif`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText(card.card_id, x + width * 0.02, y + height * 0.99);
+    if (name !== card.name) name += '…';
+    ctx.fillText(name, x + width / 2, nameY);
+    
+    // 特徴
+    if (card.features.length > 0) {
+      const featureFontSize = Math.round(height * 0.020);
+      ctx.font = `${featureFontSize}px sans-serif`;
+      const featureY = y + height * 0.942;
+      const featuresText = card.features.join(' / ');
+      const maxFeaturesWidth = width * 0.88;
+      
+      if (ctx.measureText(featuresText).width <= maxFeaturesWidth) {
+        ctx.fillText(featuresText, x + width / 2, featureY);
+      } else {
+        const midPoint = Math.ceil(card.features.length / 2);
+        const line1 = card.features.slice(0, midPoint).join(' / ');
+        const line2 = card.features.slice(midPoint).join(' / ');
+        ctx.fillText(line1, x + width / 2, featureY - featureFontSize * 0.55);
+        ctx.fillText(line2, x + width / 2, featureY + featureFontSize * 0.55);
+      }
+    }
+    
+    // カードID（左下）
+    const idFontSize = Math.round(height * 0.016);
+    ctx.font = `${idFontSize}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(card.card_id, x + width * 0.02, y + height * 0.99);
+  } // end of else (通常カード)
 }
 
 /**
@@ -460,6 +546,8 @@ export interface DeckImageCard {
 
 export interface DeckImageOptions {
   leaderUrl: string;
+  leaderCard?: Card; // ブランクリーダー用
+  leaderQrDataUrl?: string; // ブランクリーダー用QRコード
   cardUrls: string[];  // 後方互換性のため残す
   cards?: DeckImageCard[];  // 新しい形式（カード情報付き）
   deckName: string;
@@ -474,6 +562,8 @@ export interface DeckImageOptions {
 export async function generateDeckImage(options: DeckImageOptions): Promise<Blob> {
   const {
     leaderUrl,
+    leaderCard,
+    leaderQrDataUrl,
     cardUrls,
     cards,
     deckName,
@@ -508,7 +598,47 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
   const leaderCroppedHeight = UPPER_HEIGHT;
   const leaderCroppedWidth = Math.floor(leaderCroppedHeight * (400 / 280));
   
-  if (leaderUrl) {
+  // ブランクリーダーかどうか
+  const isBlankLeader = leaderCard && !leaderUrl;
+  
+  if (isBlankLeader && leaderCard) {
+    // ブランクリーダーの場合、Canvas描画
+    // まず大きいサイズで描画してから縮小配置
+    const tempCanvas = document.createElement('canvas');
+    const tempWidth = 400;
+    const tempHeight = 560;
+    tempCanvas.width = tempWidth;
+    tempCanvas.height = tempHeight;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    if (tempCtx) {
+      drawBlankCardPlaceholder(tempCtx, leaderCard, 0, 0, tempWidth, tempHeight);
+      
+      // QRコードを右下に追加
+      if (leaderQrDataUrl) {
+        try {
+          const qrImg = await loadImage(leaderQrDataUrl);
+          const qrSize = tempWidth * 0.35;
+          const qrX = tempWidth - qrSize - tempWidth * 0.03;
+          const qrY = tempHeight - qrSize - tempHeight * 0.03;
+          
+          tempCtx.fillStyle = 'white';
+          tempCtx.fillRect(qrX - 2, qrY - 2, qrSize + 4, qrSize + 4);
+          tempCtx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+        } catch (e) {
+          console.warn('Failed to draw QR on blank leader:', e);
+        }
+      }
+      
+      // メインCanvasに上半分をクロップして描画
+      const srcHeight = tempHeight / 2;
+      ctx.drawImage(
+        tempCanvas,
+        0, 0, tempWidth, srcHeight,
+        GAP, 0, leaderCroppedWidth, leaderCroppedHeight
+      );
+    }
+  } else if (leaderUrl) {
     const leaderImg = await loadImageWithProxy(leaderUrl);
     if (leaderImg) {
       // 上半分をクロップして描画
