@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { loadAllCards, filterCards, getUniqueValues } from '@/lib/cards';
 import { FilterOptions, DEFAULT_FILTER_OPTIONS } from '@/lib/types';
 
+// 動的ルートとして強制
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
