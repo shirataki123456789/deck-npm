@@ -179,7 +179,9 @@ function drawBlankCardPlaceholder(
   ctx.lineWidth = Math.max(1, width * 0.015);
   ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
   
-  // === 左上: コスト (red: x=0.02, y=0.014, w=0.147, h=0.103) ===
+  const isLeader = card.type === 'LEADER';
+  
+  // === 左上: コスト または ライフ (red: x=0.02, y=0.014, w=0.147, h=0.103) ===
   const costX = x + width * 0.02;
   const costY = y + height * 0.014;
   const costW = width * 0.147;
@@ -190,17 +192,22 @@ function drawBlankCardPlaceholder(
   
   ctx.beginPath();
   ctx.arc(costCenterX, costCenterY, costRadius, 0, Math.PI * 2);
-  ctx.fillStyle = primaryColor;
+  ctx.fillStyle = isLeader ? '#FFD700' : primaryColor; // LEADERは金色
   ctx.fill();
   ctx.strokeStyle = strokeOnColor;
   ctx.lineWidth = Math.max(1, width * 0.012);
   ctx.stroke();
   
-  ctx.fillStyle = textOnColor;
+  ctx.fillStyle = isLeader ? '#000000' : textOnColor;
   ctx.font = `bold ${Math.round(costRadius * 1.1)}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(String(card.cost >= 0 ? card.cost : '-'), costCenterX, costCenterY);
+  
+  // LEADERの場合はblock_iconからライフを取得、それ以外はコスト
+  const displayValue = isLeader 
+    ? (card.block_icon || '5')  // ライフ（block_iconに保存）
+    : String(card.cost >= 0 ? card.cost : '-');
+  ctx.fillText(displayValue, costCenterX, costCenterY);
   
   // === 右上: パワー (yellow: x=0.663~0.865, y=0.025~0.075) ===
   ctx.fillStyle = textOnColor;
@@ -222,7 +229,23 @@ function drawBlankCardPlaceholder(
   }
   
   // === 左側: カウンター縦書き (black: x=0.02~0.05, y=0.26~0.50) ===
-  if (card.counter > 0) {
+  // LEADERの場合はカウンター非表示、代わりにLEADERタグ表示
+  if (isLeader) {
+    // LEADERタグ
+    ctx.save();
+    const tagX = x + width * 0.035;
+    const tagY = y + height * 0.38;
+    
+    ctx.translate(tagX, tagY);
+    ctx.rotate(-Math.PI / 2);
+    
+    ctx.fillStyle = '#FFD700';
+    ctx.font = `bold ${Math.round(height * 0.028)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('LEADER', 0, 0);
+    ctx.restore();
+  } else if (card.counter > 0) {
     ctx.save();
     // 縦書き位置（左側、コストの下〜効果エリアの上）
     const counterX = x + width * 0.035;
