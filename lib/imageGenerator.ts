@@ -13,6 +13,33 @@ const QR_SIZE = 400;
 const GAP = 48;
 
 /**
+ * テキストを指定幅で折り返す
+ */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  const paragraphs = text.split('\n');
+  
+  for (const paragraph of paragraphs) {
+    let line = '';
+    for (const char of paragraph) {
+      const testLine = line + char;
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > maxWidth && line !== '') {
+        lines.push(line);
+        line = char;
+      } else {
+        line = testLine;
+      }
+    }
+    if (line) {
+      lines.push(line);
+    }
+  }
+  
+  return lines;
+}
+
+/**
  * 画像をロード
  */
 function loadImage(url: string): Promise<HTMLImageElement> {
