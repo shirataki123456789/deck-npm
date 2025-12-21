@@ -244,40 +244,6 @@ export default function LeaderSelect({
         
         console.log('Deck QR:', deckQR ? 'found' : 'not found');
         
-        // 1.5. リーダーエリア（左上）のブランクリーダーQRを読み取り
-        // ブランクリーダーはリーダーエリア全体に表示され、右下にQRがある
-        const leaderAreaW = UPPER_HEIGHT * (400 / 560); // アスペクト比維持
-        const leaderAreaH = UPPER_HEIGHT;
-        const leaderQrAreaX = 48 * scaleX + leaderAreaW * scaleX * 0.55; // リーダー右半分
-        const leaderQrAreaY = leaderAreaH * scaleY * 0.55; // 下半分
-        const leaderQrAreaW = leaderAreaW * scaleX * 0.42;
-        const leaderQrAreaH = leaderAreaH * scaleY * 0.42;
-        
-        let leaderBlankQR: string | null = null;
-        const leaderScales = [2, 2.5, 3, 3.5, 4, 1.5, 1];
-        
-        for (const scale of leaderScales) {
-          leaderBlankQR = decodeQRFromRegion(leaderQrAreaX, leaderQrAreaY, leaderQrAreaW, leaderQrAreaH, scale);
-          if (leaderBlankQR && leaderBlankQR.startsWith('B|')) {
-            console.log(`Blank leader QR found at scale=${scale}`);
-            break;
-          }
-          
-          // 二値化も試す
-          leaderBlankQR = decodeQRFromRegionWithThreshold(leaderQrAreaX, leaderQrAreaY, leaderQrAreaW, leaderQrAreaH, scale);
-          if (leaderBlankQR && leaderBlankQR.startsWith('B|')) {
-            console.log(`Blank leader QR found at scale=${scale} (threshold)`);
-            break;
-          }
-          
-          leaderBlankQR = null;
-        }
-        
-        if (leaderBlankQR && leaderBlankQR.startsWith('B|') && !blankCardQRs.includes(leaderBlankQR)) {
-          blankCardQRs.push(leaderBlankQR);
-          console.log('Added blank leader QR:', leaderBlankQR.substring(0, 50));
-        }
-        
         // 2. 各カード位置のQRコードを読み取り（ブランクカード用）
         for (let row = 0; row < CARDS_PER_COL; row++) {
           for (let col = 0; col < CARDS_PER_ROW; col++) {
@@ -355,6 +321,21 @@ export default function LeaderSelect({
             } else {
               blankCards.push(card);
               console.log('Decoded blank card:', card.name);
+            }
+          }
+        }
+        
+        // メインQRからブランクリーダー情報を抽出（#LEADER:B|...形式）
+        if (deckQR && deckQR.includes('#LEADER:')) {
+          const leaderMatch = deckQR.match(/#LEADER:(B\|[^\n]+)/);
+          if (leaderMatch) {
+            const leaderCard = decodeBlankCardFromQR(leaderMatch[1]);
+            if (leaderCard && leaderCard.type === 'LEADER') {
+              // 重複チェック
+              if (!blankLeadersFromQR.some(l => l.card_id === leaderCard.card_id)) {
+                blankLeadersFromQR.push(leaderCard);
+                console.log('Decoded blank leader from main QR:', leaderCard.name);
+              }
             }
           }
         }

@@ -181,6 +181,13 @@ export default function DeckSidebar({
         qrText += `\n#BLANK:${blankInfo}`;
       }
       
+      // ブランクリーダーの場合、リーダー情報もQRに追加
+      const isBlankLeader = !leaderCard.image_url;
+      if (isBlankLeader) {
+        const leaderEncoded = encodeBlankCardForQR(leaderCard);
+        qrText += `\n#LEADER:${leaderEncoded}`;
+      }
+      
       // QRコードをData URLとして生成
       const qrDataUrl = qrText ? await QRCode.toDataURL(qrText, {
         width: 400,
@@ -194,7 +201,8 @@ export default function DeckSidebar({
       // ブランクカード用のQRコードを事前生成（重複を避けるためキャッシュ）
       const blankCardQRCache: Record<string, string> = {};
       for (const info of deckCardInfos) {
-        if (info.card && !info.image_url && info.card.card_id.startsWith('BLANK-')) {
+        // 画像URLがないカードはすべてブランクカードとしてQR生成
+        if (info.card && !info.image_url) {
           if (!blankCardQRCache[info.card.card_id]) {
             try {
               const encoded = encodeBlankCardForQR(info.card);
@@ -232,9 +240,14 @@ export default function DeckSidebar({
         }
       });
       
+      // ブランクリーダーかどうか（QRはメインQRに含まれるので個別生成不要）
+      const isBlankLeader = !leaderCard.image_url;
+      
       // クライアントサイドで画像生成
       const blob = await generateDeckImage({
         leaderUrl: leaderCard.image_url,
+        leaderCard: isBlankLeader ? leaderCard : undefined,
+        leaderQrDataUrl: undefined, // ブランクリーダー情報はメインQRに含まれる
         cardUrls: [], // 後方互換性のため空配列
         cards: cards.slice(0, 50),
         deckName: deck.name,
