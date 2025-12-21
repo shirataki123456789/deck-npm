@@ -240,10 +240,7 @@ export default function DeckSidebar({
         }
       });
       
-      // ブランクリーダーかどうか（QRはメインQRに含まれるので個別生成不要）
-      const isBlankLeader = !leaderCard.image_url;
-      
-      // クライアントサイドで画像生成
+      // クライアントサイドで画像生成（isBlankLeaderは上で定義済み）
       const blob = await generateDeckImage({
         leaderUrl: leaderCard.image_url,
         leaderCard: isBlankLeader ? leaderCard : undefined,
