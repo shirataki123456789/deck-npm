@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import QRCode from 'qrcode';
 
+// 動的ルートとして強制
+export const dynamic = 'force-dynamic';
+
 // GET /api/qr?text=...&size=400 - QRコード画像を生成
 export async function GET(request: NextRequest) {
   try {
