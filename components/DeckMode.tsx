@@ -150,8 +150,12 @@ export default function DeckMode() {
       });
       const data = await res.json();
       
-      // ブランクカードもフィルタして追加
+      // ブランクカードもフィルタして追加（LEADERは除外）
       const filteredBlankCards = blankCards.filter(card => {
+        // LEADERタイプは除外
+        if (card.type === 'LEADER') {
+          return false;
+        }
         // リーダー色フィルタ
         if (filterOptions.leader_colors.length > 0) {
           if (!card.color.some(c => filterOptions.leader_colors.includes(c))) {
@@ -453,6 +457,12 @@ export default function DeckMode() {
             onChangeLeader={handleChangeLeader}
             onRemoveCard={handleRemoveCard}
             onAddCard={handleAddCard}
+            onEditBlankLeader={(card) => {
+              // ブランクリーダー編集後に更新
+              setBlankCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
+              setAllCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
+              setLeaderCard(card);
+            }}
           />
         )}
         

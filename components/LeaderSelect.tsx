@@ -684,12 +684,13 @@ export default function LeaderSelect({
 }
 
 // ブランクリーダー作成モーダル
-interface BlankLeaderModalProps {
+export interface BlankLeaderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (card: Card) => void;
   editCard?: Card | null;
   existingIds: string[];
+  availableAttributes?: string[]; // 属性リスト
 }
 
 let blankLeaderCounter = Date.now() % 10000;
@@ -698,18 +699,22 @@ const generateBlankLeaderId = () => {
   return `BLANK-L${String(blankLeaderCounter).padStart(3, '0')}`;
 };
 
-function BlankLeaderModal({ isOpen, onClose, onSubmit, editCard, existingIds }: BlankLeaderModalProps) {
+export function BlankLeaderModal({ isOpen, onClose, onSubmit, editCard, existingIds, availableAttributes = [] }: BlankLeaderModalProps) {
   const [cardId, setCardId] = useState('');
   const [name, setName] = useState('');
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [life, setLife] = useState(5);
   const [power, setPower] = useState(5000);
-  const [attribute, setAttribute] = useState('');
+  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
   const [features, setFeatures] = useState('');
   const [effectText, setEffectText] = useState('');
   const [error, setError] = useState('');
   
   const isEditMode = !!editCard;
+  
+  // デフォルトの属性リスト
+  const defaultAttributes = ['斬', '打', '射', '知', '特'];
+  const attrs = availableAttributes.length > 0 ? availableAttributes : defaultAttributes;
   
   useEffect(() => {
     if (editCard) {
@@ -718,7 +723,7 @@ function BlankLeaderModal({ isOpen, onClose, onSubmit, editCard, existingIds }: 
       setSelectedColors(editCard.color);
       setLife(editCard.block_icon ? parseInt(editCard.block_icon) || 5 : 5);
       setPower(editCard.power);
-      setAttribute(editCard.attribute || '');
+      setSelectedAttributes(editCard.attribute ? editCard.attribute.split('/') : []);
       setFeatures(editCard.features.join('/'));
       setEffectText(editCard.text || '');
       setError('');
@@ -733,7 +738,7 @@ function BlankLeaderModal({ isOpen, onClose, onSubmit, editCard, existingIds }: 
     setSelectedColors([]);
     setLife(5);
     setPower(5000);
-    setAttribute('');
+    setSelectedAttributes([]);
     setFeatures('');
     setEffectText('');
     setError('');
@@ -742,6 +747,12 @@ function BlankLeaderModal({ isOpen, onClose, onSubmit, editCard, existingIds }: 
   const toggleColor = (color: string) => {
     setSelectedColors(prev =>
       prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]
+    );
+  };
+  
+  const toggleAttribute = (attr: string) => {
+    setSelectedAttributes(prev =>
+      prev.includes(attr) ? prev.filter(a => a !== attr) : [...prev, attr]
     );
   };
   
@@ -769,7 +780,7 @@ function BlankLeaderModal({ isOpen, onClose, onSubmit, editCard, existingIds }: 
       type: 'LEADER',
       rarity: 'L',
       cost: -1,
-      attribute: attribute,
+      attribute: selectedAttributes.join('/'),
       power: power,
       counter: 0,
       color: selectedColors,
@@ -885,14 +896,26 @@ function BlankLeaderModal({ isOpen, onClose, onSubmit, editCard, existingIds }: 
             
             {/* 属性 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">属性</label>
-              <input
-                type="text"
-                value={attribute}
-                onChange={(e) => setAttribute(e.target.value)}
-                placeholder="斬/打/特 など"
-                className="w-full border rounded px-3 py-2 text-sm"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">属性（複数選択可）</label>
+              <div className="flex flex-wrap gap-2">
+                {attrs.map(attr => (
+                  <button
+                    key={attr}
+                    type="button"
+                    onClick={() => toggleAttribute(attr)}
+                    className={`px-3 py-1.5 rounded border text-sm transition-colors ${
+                      selectedAttributes.includes(attr)
+                        ? 'bg-purple-600 text-white border-purple-600'
+                        : 'bg-white border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {attr}
+                  </button>
+                ))}
+              </div>
+              {selectedAttributes.length > 0 && (
+                <p className="text-xs text-gray-500 mt-1">選択中: {selectedAttributes.join('/')}</p>
+              )}
             </div>
             
             {/* 特徴 */}

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, Deck, UNLIMITED_CARDS } from '@/lib/types';
 import { drawBlankCardPlaceholder } from '@/lib/imageGenerator';
 import ImageModal from './ImageModal';
+import { BlankLeaderModal } from './LeaderSelect';
 
 // ブランクカードをCanvasで描画するコンポーネント
 function BlankCardCanvas({ card, onClick }: { card: Card; onClick?: () => void }) {
@@ -76,6 +77,7 @@ interface DeckPreviewProps {
   onChangeLeader: () => void;
   onRemoveCard: (cardId: string) => void;
   onAddCard: (card: Card) => void;
+  onEditBlankLeader?: (card: Card) => void; // ブランクリーダー編集
 }
 
 interface DeckCardInfo {
@@ -99,13 +101,18 @@ export default function DeckPreview({
   onChangeLeader,
   onRemoveCard,
   onAddCard,
+  onEditBlankLeader,
 }: DeckPreviewProps) {
   const [sortedCardIds, setSortedCardIds] = useState<string[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [colsCount, setColsCount] = useState(5);
   const [showStats, setShowStats] = useState(true);
   const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
+  const [showBlankLeaderModal, setShowBlankLeaderModal] = useState(false);
   const lastCardIdsRef = useRef<string>('');
+  
+  // ブランクリーダーかどうか
+  const isBlankLeader = !leaderCard.image_url;
   
   // カードIDリストが変わった時だけソート順を取得
   useEffect(() => {
@@ -249,15 +256,27 @@ export default function DeckPreview({
       <div className="bg-white rounded-lg shadow p-4 mb-4">
         <div className="flex gap-4">
           <div className="w-24 sm:w-32 flex-shrink-0">
-            <img
-              src={leaderCard.image_url}
-              alt={leaderCard.name}
-              className="w-full rounded"
-            />
+            {isBlankLeader ? (
+              <BlankCardCanvas card={leaderCard} />
+            ) : (
+              <img
+                src={leaderCard.image_url}
+                alt={leaderCard.name}
+                className="w-full rounded"
+              />
+            )}
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-lg">{leaderCard.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-lg">{leaderCard.name}</h3>
+              {isBlankLeader && (
+                <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">📝 BLANK</span>
+              )}
+            </div>
             <p className="text-gray-600 text-sm">ID: {leaderCard.card_id}</p>
+            {isBlankLeader && leaderCard.block_icon && (
+              <p className="text-gray-600 text-sm">ライフ: {leaderCard.block_icon} / パワー: {leaderCard.power}</p>
+            )}
             <div className="flex gap-1 mt-2">
               {leaderCard.color.map(c => (
                 <span key={c} className={`color-badge color-badge-${c}`}>
@@ -265,15 +284,39 @@ export default function DeckPreview({
                 </span>
               ))}
             </div>
-            <button
-              onClick={onChangeLeader}
-              className="mt-3 btn btn-secondary btn-sm"
-            >
-              🔄 リーダーを変更
-            </button>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={onChangeLeader}
+                className="btn btn-secondary btn-sm"
+              >
+                🔄 リーダーを変更
+              </button>
+              {isBlankLeader && onEditBlankLeader && (
+                <button
+                  onClick={() => setShowBlankLeaderModal(true)}
+                  className="btn bg-purple-600 hover:bg-purple-700 text-white btn-sm"
+                >
+                  ✏️ 編集
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
+      
+      {/* ブランクリーダー編集モーダル */}
+      {showBlankLeaderModal && isBlankLeader && onEditBlankLeader && (
+        <BlankLeaderModal
+          isOpen={showBlankLeaderModal}
+          onClose={() => setShowBlankLeaderModal(false)}
+          onSubmit={(card) => {
+            onEditBlankLeader(card);
+            setShowBlankLeaderModal(false);
+          }}
+          editCard={leaderCard}
+          existingIds={[]}
+        />
+      )}
       
       {/* 統計情報 */}
       <div className="bg-white rounded-lg shadow p-4 mb-4">
