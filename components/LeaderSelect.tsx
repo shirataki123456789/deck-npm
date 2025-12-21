@@ -311,32 +311,61 @@ export default function LeaderSelect({
         
         // ブランクカードをデコード
         const blankCards: Card[] = [];
+        const blankLeadersFromQR: Card[] = [];
         for (const qr of blankCardQRs) {
           const card = decodeBlankCardFromQR(qr);
           if (card) {
-            blankCards.push(card);
-            console.log('Decoded blank card:', card.name);
+            if (card.type === 'LEADER') {
+              blankLeadersFromQR.push(card);
+              console.log('Decoded blank leader:', card.name);
+            } else {
+              blankCards.push(card);
+              console.log('Decoded blank card:', card.name);
+            }
           }
         }
         
         URL.revokeObjectURL(url);
         
         // 結果を処理
-        if (deckQR || blankCards.length > 0) {
-          // ブランクカードがあれば先にインポート
+        if (deckQR || blankCards.length > 0 || blankLeadersFromQR.length > 0) {
+          // ブランクカード（リーダー以外）があれば先にインポート
           if (blankCards.length > 0) {
             window.dispatchEvent(new CustomEvent('importBlankCards', { detail: blankCards }));
+          }
+          
+          // ブランクリーダーがあればインポート
+          if (blankLeadersFromQR.length > 0) {
+            window.dispatchEvent(new CustomEvent('importBlankCards', { detail: blankLeadersFromQR }));
           }
           
           // デッキQRがあればインポート
           if (deckQR) {
             onImport(deckQR);
             
-            if (blankCards.length > 0) {
-              alert(`デッキをインポートしました。\nブランクカード ${blankCards.length} 種類も検出されました。`);
+            const importedParts: string[] = [];
+            if (blankLeadersFromQR.length > 0) {
+              importedParts.push(`ブランクリーダー ${blankLeadersFromQR.length} 種類`);
             }
-          } else if (blankCards.length > 0) {
-            alert(`ブランクカード ${blankCards.length} 種類をインポートしました。\n※ デッキのQRコードは検出されませんでした。`);
+            if (blankCards.length > 0) {
+              importedParts.push(`ブランクカード ${blankCards.length} 種類`);
+            }
+            
+            if (importedParts.length > 0) {
+              alert(`デッキをインポートしました。\n${importedParts.join('、')}も検出されました。`);
+            }
+          } else {
+            const importedParts: string[] = [];
+            if (blankLeadersFromQR.length > 0) {
+              importedParts.push(`ブランクリーダー ${blankLeadersFromQR.length} 種類`);
+            }
+            if (blankCards.length > 0) {
+              importedParts.push(`ブランクカード ${blankCards.length} 種類`);
+            }
+            
+            if (importedParts.length > 0) {
+              alert(`${importedParts.join('、')}をインポートしました。\n※ デッキのQRコードは検出されませんでした。`);
+            }
           }
         } else {
           alert('QRコードが検出されませんでした。\n画像が鮮明でない、またはQRコードが小さすぎる可能性があります。');
