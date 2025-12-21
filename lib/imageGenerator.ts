@@ -629,45 +629,153 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
   const isBlankLeader = leaderCard && !leaderUrl;
   
   if (isBlankLeader && leaderCard) {
-    // ブランクリーダーの場合、Canvas描画（全体表示＋QRコード）
-    const tempCanvas = document.createElement('canvas');
-    const tempWidth = 400;
-    const tempHeight = 560;
-    tempCanvas.width = tempWidth;
-    tempCanvas.height = tempHeight;
-    const tempCtx = tempCanvas.getContext('2d');
+    // ブランクリーダーの場合、テキスト情報を表示（QRは右上のメインQRに含める）
+    const areaX = GAP;
+    const areaY = 0;
+    const areaW = leaderCroppedWidth;
+    const areaH = leaderCroppedHeight;
     
-    if (tempCtx) {
-      drawBlankCardPlaceholder(tempCtx, leaderCard, 0, 0, tempWidth, tempHeight);
-      
-      // QRコードを右下に追加
-      if (leaderQrDataUrl) {
-        try {
-          const qrImg = await loadImage(leaderQrDataUrl);
-          const qrSize = tempWidth * 0.32;
-          const qrX = tempWidth - qrSize - tempWidth * 0.02;
-          const qrY = tempHeight - qrSize - tempHeight * 0.02;
-          
-          // 白い背景
-          tempCtx.fillStyle = 'white';
-          tempCtx.fillRect(qrX - 3, qrY - 3, qrSize + 6, qrSize + 6);
-          tempCtx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-        } catch (e) {
-          console.warn('Failed to draw QR on blank leader:', e);
-        }
-      }
-      
-      // メインCanvasに全体を描画（上部エリアにフィット）
-      // アスペクト比を維持して配置
-      const targetHeight = leaderCroppedHeight;
-      const targetWidth = Math.floor(targetHeight * (tempWidth / tempHeight));
-      
-      ctx.drawImage(
-        tempCanvas,
-        0, 0, tempWidth, tempHeight,
-        GAP, 0, targetWidth, targetHeight
-      );
+    // 背景（リーダー色のグラデーション）
+    const cardColors = leaderCard.color.map(c => COLOR_HEX[c] || '#888888');
+    if (cardColors.length === 0) cardColors.push('#888888');
+    
+    const gradient = ctx.createLinearGradient(areaX, areaY, areaX + areaW, areaY + areaH);
+    if (cardColors.length === 1) {
+      gradient.addColorStop(0, cardColors[0]);
+      gradient.addColorStop(1, cardColors[0]);
+    } else {
+      cardColors.forEach((color, i) => {
+        gradient.addColorStop(i / (cardColors.length - 1), color);
+      });
     }
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(areaX, areaY, areaW, areaH);
+    
+    // 半透明オーバーレイ
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(areaX, areaY, areaW, areaH);
+    
+    // 枠線（金色）
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(areaX + 2, areaY + 2, areaW - 4, areaH - 4);
+    
+    // テキスト描画
+    const isLight = false; // 暗いオーバーレイがあるので白文字
+    const textColor = '#FFFFFF';
+    const goldColor = '#FFD700';
+    
+    let yPos = areaY + 40;
+    const lineHeight = 36;
+    const padding = 20;
+    
+    // LEADERラベル
+    ctx.fillStyle = goldColor;
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('📝 BLANK LEADER', areaX + areaW / 2, yPos);
+    yPos += lineHeight + 20;
+    
+    // カード名
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 42px sans-serif';
+    const maxNameWidth = areaW - padding * 2;
+    let displayName = leaderCard.name;
+    while (ctx.measureText(displayName).width > maxNameWidth && displayName.length > 1) {
+      displayName = displayName.slice(0, -1);
+    }
+    if (displayName !== leaderCard.name) displayName += '…';
+    ctx.fillText(displayName, areaX + areaW / 2, yPos);
+    yPos += lineHeight + 30;
+    
+    // 区切り線
+    ctx.strokeStyle = goldColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(areaX + padding, yPos);
+    ctx.lineTo(areaX + areaW - padding, yPos);
+    ctx.stroke();
+    yPos += 20;
+    
+    // ステータス情報（左寄せ）
+    ctx.textAlign = 'left';
+    ctx.font = '28px sans-serif';
+    
+    // ライフ
+    ctx.fillStyle = goldColor;
+    ctx.fillText('LIFE:', areaX + padding, yPos);
+    ctx.fillStyle = textColor;
+    ctx.fillText(leaderCard.block_icon || '5', areaX + padding + 80, yPos);
+    yPos += lineHeight;
+    
+    // パワー
+    ctx.fillStyle = goldColor;
+    ctx.fillText('POWER:', areaX + padding, yPos);
+    ctx.fillStyle = textColor;
+    ctx.fillText(String(leaderCard.power || 5000), areaX + padding + 110, yPos);
+    yPos += lineHeight;
+    
+    // 属性
+    if (leaderCard.attribute) {
+      ctx.fillStyle = goldColor;
+      ctx.fillText('属性:', areaX + padding, yPos);
+      ctx.fillStyle = textColor;
+      ctx.fillText(leaderCard.attribute, areaX + padding + 80, yPos);
+      yPos += lineHeight;
+    }
+    
+    // 色
+    ctx.fillStyle = goldColor;
+    ctx.fillText('色:', areaX + padding, yPos);
+    ctx.fillStyle = textColor;
+    ctx.fillText(leaderCard.color.join(' / '), areaX + padding + 50, yPos);
+    yPos += lineHeight;
+    
+    // 特徴
+    if (leaderCard.features && leaderCard.features.length > 0) {
+      ctx.fillStyle = goldColor;
+      ctx.fillText('特徴:', areaX + padding, yPos);
+      yPos += lineHeight;
+      ctx.fillStyle = textColor;
+      ctx.font = '22px sans-serif';
+      const featuresText = leaderCard.features.join(' / ');
+      // 複数行に分割
+      const featuresLines = wrapText(ctx, featuresText, areaW - padding * 2);
+      featuresLines.slice(0, 2).forEach(line => {
+        ctx.fillText(line, areaX + padding, yPos);
+        yPos += 28;
+      });
+    }
+    
+    yPos += 10;
+    
+    // 効果テキスト
+    if (leaderCard.text) {
+      ctx.fillStyle = goldColor;
+      ctx.font = '28px sans-serif';
+      ctx.fillText('効果:', areaX + padding, yPos);
+      yPos += lineHeight;
+      
+      ctx.fillStyle = textColor;
+      ctx.font = '20px sans-serif';
+      const effectLines = wrapText(ctx, leaderCard.text, areaW - padding * 2);
+      effectLines.slice(0, 6).forEach(line => {
+        ctx.fillText(line, areaX + padding, yPos);
+        yPos += 24;
+      });
+      if (effectLines.length > 6) {
+        ctx.fillText('...', areaX + padding, yPos);
+      }
+    }
+    
+    // カードID（最下部）
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = '18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(leaderCard.card_id, areaX + areaW / 2, areaY + areaH - 20);
+    
   } else if (leaderUrl) {
     const leaderImg = await loadImageWithProxy(leaderUrl);
     if (leaderImg) {
