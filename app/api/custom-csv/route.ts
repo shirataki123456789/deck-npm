@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+// 動的ルートとして強制
+export const dynamic = 'force-dynamic';
+
 // GET /api/custom-csv - custom_cards.csvの内容を取得
 export async function GET() {
   try {
