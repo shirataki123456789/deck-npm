@@ -184,7 +184,8 @@ export default function LeaderSelect({
         // 結果格納
         let deckQR: string | null = null;
         
-        // メインQRコード（右上）を読み取り
+        // メインQRコード（右上）を読み取り - 複数のレイアウトに対応
+        // 新フォーマット: QRが中央寄り
         const qrX = (FINAL_WIDTH - 48 - 400) * scaleX;
         const qrY = ((UPPER_HEIGHT - 400) / 2) * scaleY;
         const qrW = 400 * scaleX;
@@ -194,6 +195,43 @@ export default function LeaderSelect({
         for (const scale of [1, 1.5, 2]) {
           deckQR = decodeQRFromRegion(qrX, qrY, qrW, qrH, scale);
           if (deckQR && !deckQR.startsWith('B|')) break;
+          deckQR = null;
+        }
+        
+        // 見つからない場合、古いフォーマット（QRが右上角寄り）を試す
+        if (!deckQR) {
+          // 古いフォーマット: 右上の角に近い位置
+          const oldQrX = (FINAL_WIDTH - 48 - 350) * scaleX;
+          const oldQrY = 30 * scaleY;
+          const oldQrW = 320 * scaleX;
+          const oldQrH = 320 * scaleY;
+          
+          for (const scale of [1, 1.5, 2]) {
+            deckQR = decodeQRFromRegion(oldQrX, oldQrY, oldQrW, oldQrH, scale);
+            if (deckQR && !deckQR.startsWith('B|')) {
+              console.log('Found QR with old format layout');
+              break;
+            }
+            deckQR = null;
+          }
+        }
+        
+        // さらに見つからない場合、上部エリア全体をスキャン
+        if (!deckQR) {
+          // 上部右側エリア全体
+          const wideQrX = (FINAL_WIDTH * 0.6) * scaleX;
+          const wideQrY = 0;
+          const wideQrW = (FINAL_WIDTH * 0.38) * scaleX;
+          const wideQrH = (UPPER_HEIGHT * 0.8) * scaleY;
+          
+          for (const scale of [0.5, 0.75, 1]) {
+            deckQR = decodeQRFromRegion(wideQrX, wideQrY, wideQrW, wideQrH, scale);
+            if (deckQR && !deckQR.startsWith('B|')) {
+              console.log('Found QR with wide area scan');
+              break;
+            }
+            deckQR = null;
+          }
         }
         
         console.log('Deck QR:', deckQR ? 'found' : 'not found');
