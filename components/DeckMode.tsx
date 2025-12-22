@@ -41,7 +41,7 @@ export default function DeckMode() {
   
   // カード検索関連
   const [allCards, setAllCards] = useState<Card[]>([]); // 全カードのキャッシュ
-  const [blankCards, setBlankCards] = useState<Card[]>([]); // ブランクカード（セッション内のみ）
+  const [blankCards, setBlankCards] = useState<Card[]>([]); // ブランクカード
   const [filteredCards, setFilteredCards] = useState<Card[]>([]);
   const [filter, setFilter] = useState<FilterOptions>({
     ...DEFAULT_FILTER_OPTIONS,
@@ -51,6 +51,32 @@ export default function DeckMode() {
   const [loading, setLoading] = useState(false);
   const [colsCount, setColsCount] = useState(4);
   const [showBlankCardModal, setShowBlankCardModal] = useState(false);
+  
+  // ブランクカードをlocalStorageから復元
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('blankCards');
+      if (saved) {
+        const parsed = JSON.parse(saved) as Card[];
+        setBlankCards(parsed);
+        console.log(`Restored ${parsed.length} blank cards from localStorage`);
+      }
+    } catch (e) {
+      console.warn('Failed to restore blank cards:', e);
+    }
+  }, []);
+  
+  // ブランクカードをlocalStorageに保存
+  useEffect(() => {
+    if (blankCards.length > 0) {
+      try {
+        localStorage.setItem('blankCards', JSON.stringify(blankCards));
+        console.log(`Saved ${blankCards.length} blank cards to localStorage`);
+      } catch (e) {
+        console.warn('Failed to save blank cards:', e);
+      }
+    }
+  }, [blankCards]);
   
   // ブランクカードインポートイベントのリスナー
   useEffect(() => {
@@ -329,6 +355,19 @@ export default function DeckMode() {
         console.log('Blank card counts from QR:', blankCardCounts);
       }
       
+      // ブランクリーダー情報を抽出
+      // フォーマット: #LEADER:B|id|name|type|...
+      let blankLeaderFromQR: Card | null = null;
+      const leaderMatch = text.match(/#LEADER:(B\|[^\n]+)/m);
+      if (leaderMatch) {
+        cleanText = cleanText.replace(/\n?#LEADER:.+$/m, '');
+        const { decodeBlankCardFromQR } = await import('@/lib/blankCardQR');
+        blankLeaderFromQR = decodeBlankCardFromQR(leaderMatch[1]);
+        if (blankLeaderFromQR) {
+          console.log('Blank leader from QR:', blankLeaderFromQR.name);
+        }
+      }
+      
       const res = await fetch('/api/deck', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -350,12 +389,41 @@ export default function DeckMode() {
             ...blankCardCounts,
           },
         };
+        
+        // ブランクリーダーの場合はリーダーIDを上書き
+        if (blankLeaderFromQR) {
+          deckWithBlankCards.leader = blankLeaderFromQR.card_id;
+        }
+        
         setDeck(deckWithBlankCards);
         
-        // リーダーカード情報を取得（allCardsから検索、またはAPIから取得）
-        if (data.deck.leader) {
-          // まずキャッシュされたallCardsから検索
+        // リーダーカード情報を取得
+        if (blankLeaderFromQR) {
+          // ブランクリーダーをセット（先に追加してからリーダーとしてセット）
+          setBlankCards(prev => {
+            if (prev.some(c => c.card_id === blankLeaderFromQR!.card_id)) return prev;
+            return [...prev, blankLeaderFromQR!];
+          });
+          setAllCards(prev => {
+            if (prev.some(c => c.card_id === blankLeaderFromQR!.card_id)) return prev;
+            return [...prev, blankLeaderFromQR!];
+          });
+          setLeaderCard(blankLeaderFromQR);
+          setView('preview');
+          
+          // ブランクカード枚数があれば通知
+          if (Object.keys(blankCardCounts).length > 0) {
+            const totalBlank = Object.values(blankCardCounts).reduce((sum, c) => sum + c, 0);
+            console.log(`Imported ${totalBlank} blank cards`);
+          }
+        } else if (data.deck.leader) {
+          // 通常リーダー: まずキャッシュされたallCardsから検索
           let foundLeader = allCards.find(c => c.card_id === data.deck.leader);
+          
+          // blankCardsからも検索
+          if (!foundLeader) {
+            foundLeader = blankCards.find(c => c.card_id === data.deck.leader);
+          }
           
           // 見つからない場合はAPIから取得
           if (!foundLeader) {
