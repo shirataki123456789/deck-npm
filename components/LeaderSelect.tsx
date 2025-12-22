@@ -146,18 +146,8 @@ export default function LeaderSelect({
           return;
         }
         
-        // デッキ画像のレイアウト定数（imageGenerator.tsと同じ）
-        const FINAL_WIDTH = 2150;
-        const FINAL_HEIGHT = 2048;
-        const GRID_HEIGHT = 1500;
-        const UPPER_HEIGHT = FINAL_HEIGHT - GRID_HEIGHT;
-        
-        // 画像のスケール比率を計算
-        const scaleX = img.width / FINAL_WIDTH;
-        const scaleY = img.height / FINAL_HEIGHT;
-        
-        // 単一QRを検出する関数
-        const decodeQRFromRegion = (
+        // 単一QRを検出する関数（領域を直接ピクセル座標で指定）
+        const decodeQRFromPixelRegion = (
           srcX: number,
           srcY: number,
           srcW: number,
@@ -181,53 +171,152 @@ export default function LeaderSelect({
           return code?.data || null;
         };
         
+        // 二値化処理付きQR検出（小さいQR対応）
+        const decodeQRWithThreshold = (
+          srcX: number,
+          srcY: number,
+          srcW: number,
+          srcH: number,
+          scale: number = 1
+        ): string | null => {
+          const w = Math.floor(srcW * scale);
+          const h = Math.floor(srcH * scale);
+          
+          canvas.width = w;
+          canvas.height = h;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, w, h);
+          
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const data = imageData.data;
+          
+          // 二値化処理（コントラスト強調）
+          for (let i = 0; i < data.length; i += 4) {
+            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            const val = avg > 128 ? 255 : 0;
+            data[i] = val;
+            data[i + 1] = val;
+            data[i + 2] = val;
+          }
+          
+          const code = jsQR(data, w, h, {
+            inversionAttempts: 'attemptBoth',
+          });
+          
+          return code?.data || null;
+        };
+        
+        // 画像全体からQRを検出する関数（フォールバック用）
+        const decodeQRFromFullImage = (scale: number = 1): string | null => {
+          const w = Math.floor(img.width * scale);
+          const h = Math.floor(img.height * scale);
+          
+          canvas.width = w;
+          canvas.height = h;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, w, h);
+          
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const code = jsQR(imageData.data, w, h, {
+            inversionAttempts: 'attemptBoth',
+          });
+          
+          return code?.data || null;
+        };
+        
+        // 画像全体からQRを検出（二値化版）
+        const decodeQRFromFullImageWithThreshold = (scale: number = 1): string | null => {
+          const w = Math.floor(img.width * scale);
+          const h = Math.floor(img.height * scale);
+          
+          canvas.width = w;
+          canvas.height = h;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, w, h);
+          
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const data = imageData.data;
+          
+          for (let i = 0; i < data.length; i += 4) {
+            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            const val = avg > 128 ? 255 : 0;
+            data[i] = val;
+            data[i + 1] = val;
+            data[i + 2] = val;
+          }
+          
+          const code = jsQR(data, w, h, {
+            inversionAttempts: 'attemptBoth',
+          });
+          
+          return code?.data || null;
+        };
+        
         // 結果格納
         let deckQR: string | null = null;
         
-        // メインQRコード（右上）を読み取り - 複数のレイアウトに対応
-        // 新フォーマット: QRが中央寄り
+        // === 方法1: 新フォーマット（このアプリ生成の画像）===
+        // デッキ画像のレイアウト定数
+        const FINAL_WIDTH = 2150;
+        const FINAL_HEIGHT = 2048;
+        const GRID_HEIGHT = 1500;
+        const UPPER_HEIGHT = FINAL_HEIGHT - GRID_HEIGHT;
+        const scaleX = img.width / FINAL_WIDTH;
+        const scaleY = img.height / FINAL_HEIGHT;
+        
         const qrX = (FINAL_WIDTH - 48 - 400) * scaleX;
         const qrY = ((UPPER_HEIGHT - 400) / 2) * scaleY;
         const qrW = 400 * scaleX;
         const qrH = 400 * scaleY;
         
-        // 少ないスケールで高速に試行
-        for (const scale of [1, 1.5, 2]) {
-          deckQR = decodeQRFromRegion(qrX, qrY, qrW, qrH, scale);
+        for (const scale of [1, 1.5, 2, 2.5, 3]) {
+          deckQR = decodeQRFromPixelRegion(qrX, qrY, qrW, qrH, scale);
+          if (deckQR && !deckQR.startsWith('B|')) break;
+          // 二値化版も試す
+          deckQR = decodeQRWithThreshold(qrX, qrY, qrW, qrH, scale);
           if (deckQR && !deckQR.startsWith('B|')) break;
           deckQR = null;
         }
         
-        // 見つからない場合、古いフォーマット（QRが右上角寄り）を試す
+        // === 方法2: 旧フォーマット（右上隅にQR）===
         if (!deckQR) {
-          // 古いフォーマット: 右上の角に近い位置
-          const oldQrX = (FINAL_WIDTH - 48 - 350) * scaleX;
-          const oldQrY = 30 * scaleY;
-          const oldQrW = 320 * scaleX;
-          const oldQrH = 320 * scaleY;
+          // 右上隅の領域（画像の右上）- 位置は固定なので高スケールで集中的に試行
+          const oldQrX = img.width * 0.82;
+          const oldQrY = img.height * 0.02;
+          const oldQrW = img.width * 0.16;
+          const oldQrH = img.height * 0.18;
           
-          for (const scale of [1, 1.5, 2]) {
-            deckQR = decodeQRFromRegion(oldQrX, oldQrY, oldQrW, oldQrH, scale);
+          for (const scale of [2, 3, 4, 5, 6, 8]) {
+            deckQR = decodeQRFromPixelRegion(oldQrX, oldQrY, oldQrW, oldQrH, scale);
             if (deckQR && !deckQR.startsWith('B|')) {
-              console.log('Found QR with old format layout');
+              console.log(`Found QR in old format at scale=${scale}`);
+              break;
+            }
+            // 二値化版も試す
+            deckQR = decodeQRWithThreshold(oldQrX, oldQrY, oldQrW, oldQrH, scale);
+            if (deckQR && !deckQR.startsWith('B|')) {
+              console.log(`Found QR in old format with threshold at scale=${scale}`);
               break;
             }
             deckQR = null;
           }
         }
         
-        // さらに見つからない場合、上部エリア全体をスキャン
+        // === 方法3: 画像全体からQRを探す（フォールバック）===
         if (!deckQR) {
-          // 上部右側エリア全体
-          const wideQrX = (FINAL_WIDTH * 0.6) * scaleX;
-          const wideQrY = 0;
-          const wideQrW = (FINAL_WIDTH * 0.38) * scaleX;
-          const wideQrH = (UPPER_HEIGHT * 0.8) * scaleY;
-          
-          for (const scale of [0.5, 0.75, 1]) {
-            deckQR = decodeQRFromRegion(wideQrX, wideQrY, wideQrW, wideQrH, scale);
+          for (const scale of [0.5, 0.75, 1, 1.5, 2, 0.25]) {
+            deckQR = decodeQRFromFullImage(scale);
             if (deckQR && !deckQR.startsWith('B|')) {
-              console.log('Found QR with wide area scan');
+              console.log('Found QR from full image scan');
+              break;
+            }
+            // 二値化版も試す
+            deckQR = decodeQRFromFullImageWithThreshold(scale);
+            if (deckQR && !deckQR.startsWith('B|')) {
+              console.log('Found QR from full image scan with threshold');
               break;
             }
             deckQR = null;
@@ -236,49 +325,54 @@ export default function LeaderSelect({
         
         console.log('Deck QR:', deckQR ? 'found' : 'not found');
         
-        // ブランクカードQRリスト
+        // 新フォーマット専用: カードグリッドからブランクカードQRを読み取り
         const blankCardQRs: string[] = [];
         
-        // カードグリッドの定数
-        const GAP = 48;
-        const CARDS_PER_ROW = 10;
-        const CARDS_PER_COL = 5;
-        const CARD_WIDTH = (FINAL_WIDTH - GAP * 2) / CARDS_PER_ROW;
-        const CARD_HEIGHT = GRID_HEIGHT / CARDS_PER_COL;
-        const gridStartX = GAP;
-        const gridStartY = UPPER_HEIGHT;
+        // 新フォーマットの場合のみカードグリッドをスキャン（アスペクト比でチェック）
+        const isNewFormat = Math.abs(img.width / img.height - FINAL_WIDTH / FINAL_HEIGHT) < 0.1;
         
-        // 各カード位置のQRコードを読み取り（ブランクカード用）
-        for (let row = 0; row < CARDS_PER_COL; row++) {
-          for (let col = 0; col < CARDS_PER_ROW; col++) {
-            const cardX = (gridStartX + col * CARD_WIDTH) * scaleX;
-            const cardY = (gridStartY + row * CARD_HEIGHT) * scaleY;
-            const cardW = CARD_WIDTH * scaleX;
-            const cardH = CARD_HEIGHT * scaleY;
-            
-            // カード内のQRコード領域
-            const qrAreaX = cardX + cardW * 0.15;
-            const qrAreaY = cardY + cardH * 0.14;
-            const qrAreaW = cardW * 0.70;
-            const qrAreaH = cardH * 0.38;
-            
-            let cardQR: string | null = null;
-            
-            // 少ないスケールで高速に試行
-            for (const scale of [3, 4, 5]) {
-              cardQR = decodeQRFromRegion(qrAreaX, qrAreaY, qrAreaW, qrAreaH, scale);
-              if (cardQR && cardQR.startsWith('B|')) break;
-              cardQR = null;
-            }
-            
-            if (cardQR && cardQR.startsWith('B|') && !blankCardQRs.includes(cardQR)) {
-              blankCardQRs.push(cardQR);
-              console.log(`Added blank card QR from row=${row}, col=${col}`);
+        if (isNewFormat) {
+          // カードグリッドの定数
+          const GAP = 48;
+          const CARDS_PER_ROW = 10;
+          const CARDS_PER_COL = 5;
+          const CARD_WIDTH = (FINAL_WIDTH - GAP * 2) / CARDS_PER_ROW;
+          const CARD_HEIGHT = GRID_HEIGHT / CARDS_PER_COL;
+          const gridStartX = GAP;
+          const gridStartY = UPPER_HEIGHT;
+          
+          // 各カード位置のQRコードを読み取り（ブランクカード用）
+          for (let row = 0; row < CARDS_PER_COL; row++) {
+            for (let col = 0; col < CARDS_PER_ROW; col++) {
+              const cardX = (gridStartX + col * CARD_WIDTH) * scaleX;
+              const cardY = (gridStartY + row * CARD_HEIGHT) * scaleY;
+              const cardW = CARD_WIDTH * scaleX;
+              const cardH = CARD_HEIGHT * scaleY;
+              
+              // カード内のQRコード領域
+              const qrAreaX = cardX + cardW * 0.15;
+              const qrAreaY = cardY + cardH * 0.14;
+              const qrAreaW = cardW * 0.70;
+              const qrAreaH = cardH * 0.38;
+              
+              let cardQR: string | null = null;
+              
+              // 少ないスケールで高速に試行
+              for (const scale of [3, 4, 5]) {
+                cardQR = decodeQRFromPixelRegion(qrAreaX, qrAreaY, qrAreaW, qrAreaH, scale);
+                if (cardQR && cardQR.startsWith('B|')) break;
+                cardQR = null;
+              }
+              
+              if (cardQR && cardQR.startsWith('B|') && !blankCardQRs.includes(cardQR)) {
+                blankCardQRs.push(cardQR);
+                console.log(`Added blank card QR from row=${row}, col=${col}`);
+              }
             }
           }
+          
+          console.log(`Found ${blankCardQRs.length} blank card QRs`);
         }
-        
-        console.log(`Found ${blankCardQRs.length} blank card QRs`);
         
         // ブランクカードをデコード
         const blankCards: Card[] = [];
@@ -323,21 +417,24 @@ export default function LeaderSelect({
             window.dispatchEvent(new CustomEvent('importBlankCards', { detail: blankLeadersFromQR }));
           }
           
-          // デッキQRがあればインポート
+          // デッキQRがあればインポート（ブランクカード/リーダーの追加を待つため少し遅延）
           if (deckQR) {
-            onImport(deckQR);
-            
-            const importedParts: string[] = [];
-            if (blankLeadersFromQR.length > 0) {
-              importedParts.push(`ブランクリーダー ${blankLeadersFromQR.length} 種類`);
-            }
-            if (blankCards.length > 0) {
-              importedParts.push(`ブランクカード ${blankCards.length} 種類`);
-            }
-            
-            if (importedParts.length > 0) {
-              alert(`デッキをインポートしました。\n${importedParts.join('、')}も検出されました。`);
-            }
+            // state更新を待つために遅延
+            setTimeout(() => {
+              onImport(deckQR!);
+              
+              const importedParts: string[] = [];
+              if (blankLeadersFromQR.length > 0) {
+                importedParts.push(`ブランクリーダー ${blankLeadersFromQR.length} 種類`);
+              }
+              if (blankCards.length > 0) {
+                importedParts.push(`ブランクカード ${blankCards.length} 種類`);
+              }
+              
+              if (importedParts.length > 0) {
+                alert(`デッキをインポートしました。\n${importedParts.join('、')}も検出されました。`);
+              }
+            }, 100);
           } else {
             const importedParts: string[] = [];
             if (blankLeadersFromQR.length > 0) {
