@@ -69,6 +69,7 @@ function loadCSV(filePath: string, isParallel: boolean = false): Card[] {
     columns: true,
     skip_empty_lines: true,
     relax_column_count: true,
+    bom: true, // BOMを自動処理
   });
   
   // custom_cards.csvかどうかを判定
@@ -308,7 +309,8 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
   if (options.free_words.trim()) {
     const words = options.free_words.trim().toLowerCase().split(/\s+/);
     result = result.filter(c => {
-      const searchText = `${c.name} ${c.features.join(' ')} ${c.text} ${c.trigger}`.toLowerCase();
+      // カード名、カードID、特徴、効果テキスト、トリガーを検索対象に
+      const searchText = `${c.name} ${c.card_id} ${c.features.join(' ')} ${c.text} ${c.trigger}`.toLowerCase();
       return words.every(word => searchText.includes(word));
     });
   }
