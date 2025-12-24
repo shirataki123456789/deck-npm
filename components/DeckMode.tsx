@@ -101,9 +101,12 @@ export default function DeckMode() {
         return [...prev, ...uniqueNewCards];
       });
       
+      // LEADERタイプ以外のみallCardsに追加（リーダーはブランクリーダーセクションに表示）
       setAllCards(prev => {
         const existingIds = new Set(prev.map(c => c.card_id));
-        const uniqueNewCards = newCards.filter(card => !existingIds.has(card.card_id));
+        const uniqueNewCards = newCards.filter(card => 
+          !existingIds.has(card.card_id) && card.type !== 'LEADER'
+        );
         return [...prev, ...uniqueNewCards];
       });
     };
@@ -399,12 +402,8 @@ export default function DeckMode() {
         
         // リーダーカード情報を取得
         if (blankLeaderFromQR) {
-          // ブランクリーダーをセット（先に追加してからリーダーとしてセット）
+          // ブランクリーダーをblankCardsにのみ追加（allCardsには追加しない）
           setBlankCards(prev => {
-            if (prev.some(c => c.card_id === blankLeaderFromQR!.card_id)) return prev;
-            return [...prev, blankLeaderFromQR!];
-          });
-          setAllCards(prev => {
             if (prev.some(c => c.card_id === blankLeaderFromQR!.card_id)) return prev;
             return [...prev, blankLeaderFromQR!];
           });
