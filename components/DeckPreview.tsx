@@ -228,7 +228,7 @@ export default function DeckPreview({
         if (b[0] === 'なし') return -1;
         return Number(b[0]) - Number(a[0]);
       }),
-      byFeature: sortByCount(stats.byFeature).slice(0, 10), // 上位10件
+      byFeature: sortByCount(stats.byFeature), // 全件表示
       byCost: sortByCost(stats.byCost),
     };
   }, [stats]);
@@ -371,10 +371,10 @@ export default function DeckPreview({
               </div>
             </div>
             
-            {/* 特徴別（上位10件） */}
+            {/* 特徴別 */}
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">特徴別（上位10）</h4>
-              <div className="space-y-1 max-h-40 overflow-y-auto">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">特徴別（全{sortedStats.byFeature.length}件）</h4>
+              <div className="space-y-1 max-h-96 overflow-y-auto">
                 {sortedStats.byFeature.map(([feature, count]) => (
                   <div key={feature} className="flex justify-between text-sm">
                     <span className="truncate mr-2">{feature}</span>

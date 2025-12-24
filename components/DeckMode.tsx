@@ -200,9 +200,9 @@ export default function DeckMode() {
             return false;
           }
         }
-        // フリーワードフィルタ
+        // フリーワードフィルタ（カード名、ID、特徴、効果テキストを検索）
         if (filterOptions.free_words.trim()) {
-          const searchText = `${card.name} ${card.card_id}`.toLowerCase();
+          const searchText = `${card.name} ${card.card_id} ${card.features.join(' ')} ${card.text || ''}`.toLowerCase();
           const words = filterOptions.free_words.toLowerCase().split(/\s+/);
           if (!words.every(w => searchText.includes(w))) {
             return false;
