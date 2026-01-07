@@ -52,32 +52,6 @@ export default function DeckMode() {
   const [colsCount, setColsCount] = useState(4);
   const [showBlankCardModal, setShowBlankCardModal] = useState(false);
   
-  // ブランクカードをlocalStorageから復元
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('blankCards');
-      if (saved) {
-        const parsed = JSON.parse(saved) as Card[];
-        setBlankCards(parsed);
-        console.log(`Restored ${parsed.length} blank cards from localStorage`);
-      }
-    } catch (e) {
-      console.warn('Failed to restore blank cards:', e);
-    }
-  }, []);
-  
-  // ブランクカードをlocalStorageに保存
-  useEffect(() => {
-    if (blankCards.length > 0) {
-      try {
-        localStorage.setItem('blankCards', JSON.stringify(blankCards));
-        console.log(`Saved ${blankCards.length} blank cards to localStorage`);
-      } catch (e) {
-        console.warn('Failed to save blank cards:', e);
-      }
-    }
-  }, [blankCards]);
-  
   // ブランクカードインポートイベントのリスナー
   useEffect(() => {
     const handleImportBlankCards = (e: CustomEvent<Card[]>) => {

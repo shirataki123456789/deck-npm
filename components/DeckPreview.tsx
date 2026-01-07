@@ -119,6 +119,7 @@ export default function DeckPreview({
   const [filterAttribute, setFilterAttribute] = useState<string>('');
   const [filterFeature, setFilterFeature] = useState<string>('');
   const [filterTrigger, setFilterTrigger] = useState<string>('');
+  const [filterBlock, setFilterBlock] = useState<string>('');
   const lastCardIdsRef = useRef<string>('');
   
   // ブランクリーダーかどうか
@@ -225,6 +226,9 @@ export default function DeckPreview({
       if (filterTrigger === 'あり' && (!card.trigger || card.trigger === '-' || card.trigger.trim() === '')) return false;
       if (filterTrigger === 'なし' && card.trigger && card.trigger !== '-' && card.trigger.trim() !== '') return false;
       
+      // ブロックアイコンフィルター
+      if (filterBlock && card.block_icon !== filterBlock) return false;
+      
       // フリーワードフィルター
       if (filterText.trim()) {
         const searchText = `${card.name} ${card.card_id} ${card.features.join(' ')} ${card.text || ''}`.toLowerCase();
@@ -234,10 +238,10 @@ export default function DeckPreview({
       
       return true;
     });
-  }, [deckCards, filterType, filterCost, filterColor, filterCounter, filterPower, filterAttribute, filterFeature, filterTrigger, filterText]);
+  }, [deckCards, filterType, filterCost, filterColor, filterCounter, filterPower, filterAttribute, filterFeature, filterTrigger, filterBlock, filterText]);
   
   // フィルターがアクティブかどうか
-  const isFilterActive = filterType || filterCost !== '' || filterColor || filterCounter !== '' || filterPower !== '' || filterAttribute || filterFeature || filterTrigger || filterText.trim();
+  const isFilterActive = filterType || filterCost !== '' || filterColor || filterCounter !== '' || filterPower !== '' || filterAttribute || filterFeature || filterTrigger || filterBlock || filterText.trim();
   
   // フィルターで絞り込まれたカード枚数
   const filteredTotalCards = filteredDeckCards.reduce((sum, { count }) => sum + count, 0);
@@ -283,6 +287,7 @@ export default function DeckPreview({
     const powers = new Set<number>();
     const attributes = new Set<string>();
     const features = new Set<string>();
+    const blocks = new Set<string>();
     
     deckCards.forEach(({ card }) => {
       if (card.type) types.add(card.type);
@@ -292,6 +297,7 @@ export default function DeckPreview({
       if (card.power >= 0) powers.add(card.power);
       if (card.attribute && card.attribute !== '-') attributes.add(card.attribute);
       card.features.forEach(f => features.add(f));
+      if (card.block_icon && card.block_icon !== '-') blocks.add(card.block_icon);
     });
     
     return {
@@ -302,6 +308,7 @@ export default function DeckPreview({
       powers: Array.from(powers).sort((a, b) => a - b),
       attributes: Array.from(attributes).sort(),
       features: Array.from(features).sort(),
+      blocks: Array.from(blocks).sort(),
     };
   }, [deckCards]);
   
@@ -504,6 +511,7 @@ export default function DeckPreview({
                   setFilterAttribute('');
                   setFilterFeature('');
                   setFilterTrigger('');
+                  setFilterBlock('');
                   setFilterText('');
                 }}
                 className="text-xs text-red-600 hover:text-red-800"
@@ -644,6 +652,24 @@ export default function DeckPreview({
                 </select>
               </div>
               
+              {/* ブロックアイコンフィルター */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">ブロック</label>
+                <select
+                  value={filterBlock}
+                  onChange={(e) => setFilterBlock(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">すべて</option>
+                  {filterOptions.blocks.map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {/* 3行目：特徴、フリーワード */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {/* 特徴フィルター */}
               <div>
                 <label className="block text-xs text-gray-600 mb-1">特徴</label>
@@ -658,18 +684,18 @@ export default function DeckPreview({
                   ))}
                 </select>
               </div>
-            </div>
-            
-            {/* 3行目：フリーワード */}
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">フリーワード（スペース区切りでAND検索）</label>
-              <input
-                type="text"
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-                placeholder="カード名・効果テキスト・特徴など"
-                className="w-full border rounded px-2 py-1 text-sm"
-              />
+              
+              {/* フリーワード */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">フリーワード（スペース区切りでAND検索）</label>
+                <input
+                  type="text"
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  placeholder="カード名・効果テキスト・特徴など"
+                  className="w-full border rounded px-2 py-1 text-sm"
+                />
+              </div>
             </div>
           </div>
         )}
