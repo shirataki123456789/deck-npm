@@ -109,6 +109,16 @@ export default function DeckPreview({
   const [showStats, setShowStats] = useState(true);
   const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
   const [showBlankLeaderModal, setShowBlankLeaderModal] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
+  const [filterType, setFilterType] = useState<string>('');
+  const [filterCost, setFilterCost] = useState<string>('');
+  const [filterColor, setFilterColor] = useState<string>('');
+  const [filterText, setFilterText] = useState('');
+  const [filterCounter, setFilterCounter] = useState<string>('');
+  const [filterPower, setFilterPower] = useState<string>('');
+  const [filterAttribute, setFilterAttribute] = useState<string>('');
+  const [filterFeature, setFilterFeature] = useState<string>('');
+  const [filterTrigger, setFilterTrigger] = useState<string>('');
   const lastCardIdsRef = useRef<string>('');
   
   // ブランクリーダーかどうか
@@ -178,6 +188,60 @@ export default function DeckPreview({
     return result;
   }, [deck.cards, sortedCardIds, allCards]);
   
+  // フィルター適用後のカードリスト
+  const filteredDeckCards = useMemo(() => {
+    return deckCards.filter(({ card }) => {
+      // タイプフィルター
+      if (filterType && card.type !== filterType) return false;
+      
+      // コストフィルター
+      if (filterCost !== '') {
+        const costNum = parseInt(filterCost, 10);
+        if (!isNaN(costNum) && card.cost !== costNum) return false;
+      }
+      
+      // 色フィルター
+      if (filterColor && !card.color.includes(filterColor)) return false;
+      
+      // カウンターフィルター
+      if (filterCounter !== '') {
+        const counterNum = parseInt(filterCounter, 10);
+        if (!isNaN(counterNum) && card.counter !== counterNum) return false;
+      }
+      
+      // パワーフィルター
+      if (filterPower !== '') {
+        const powerNum = parseInt(filterPower, 10);
+        if (!isNaN(powerNum) && card.power !== powerNum) return false;
+      }
+      
+      // 属性フィルター
+      if (filterAttribute && card.attribute !== filterAttribute) return false;
+      
+      // 特徴フィルター
+      if (filterFeature && !card.features.includes(filterFeature)) return false;
+      
+      // トリガーフィルター
+      if (filterTrigger === 'あり' && (!card.trigger || card.trigger === '-' || card.trigger.trim() === '')) return false;
+      if (filterTrigger === 'なし' && card.trigger && card.trigger !== '-' && card.trigger.trim() !== '') return false;
+      
+      // フリーワードフィルター
+      if (filterText.trim()) {
+        const searchText = `${card.name} ${card.card_id} ${card.features.join(' ')} ${card.text || ''}`.toLowerCase();
+        const words = filterText.toLowerCase().split(/\s+/);
+        if (!words.every(w => searchText.includes(w))) return false;
+      }
+      
+      return true;
+    });
+  }, [deckCards, filterType, filterCost, filterColor, filterCounter, filterPower, filterAttribute, filterFeature, filterTrigger, filterText]);
+  
+  // フィルターがアクティブかどうか
+  const isFilterActive = filterType || filterCost !== '' || filterColor || filterCounter !== '' || filterPower !== '' || filterAttribute || filterFeature || filterTrigger || filterText.trim();
+  
+  // フィルターで絞り込まれたカード枚数
+  const filteredTotalCards = filteredDeckCards.reduce((sum, { count }) => sum + count, 0);
+  
   // 統計情報を計算
   const stats = useMemo((): DeckStats => {
     const byType: Record<string, number> = {};
@@ -208,6 +272,37 @@ export default function DeckPreview({
     });
     
     return { byType, byCounter, byFeature, byCost };
+  }, [deckCards]);
+  
+  // デッキ内のカードから選択肢を抽出
+  const filterOptions = useMemo(() => {
+    const types = new Set<string>();
+    const costs = new Set<number>();
+    const colors = new Set<string>();
+    const counters = new Set<number>();
+    const powers = new Set<number>();
+    const attributes = new Set<string>();
+    const features = new Set<string>();
+    
+    deckCards.forEach(({ card }) => {
+      if (card.type) types.add(card.type);
+      if (card.cost >= 0) costs.add(card.cost);
+      card.color.forEach(c => colors.add(c));
+      if (card.counter >= 0) counters.add(card.counter);
+      if (card.power >= 0) powers.add(card.power);
+      if (card.attribute && card.attribute !== '-') attributes.add(card.attribute);
+      card.features.forEach(f => features.add(f));
+    });
+    
+    return {
+      types: Array.from(types).sort(),
+      costs: Array.from(costs).sort((a, b) => a - b),
+      colors: ['赤', '緑', '青', '紫', '黒', '黄'].filter(c => colors.has(c)),
+      counters: Array.from(counters).sort((a, b) => a - b),
+      powers: Array.from(powers).sort((a, b) => a - b),
+      attributes: Array.from(attributes).sort(),
+      features: Array.from(features).sort(),
+    };
   }, [deckCards]);
   
   const totalCards = Object.values(deck.cards).reduce((sum, count) => sum + count, 0);
@@ -390,7 +485,33 @@ export default function DeckPreview({
       {/* デッキカード一覧 */}
       <div className="bg-white rounded-lg shadow p-4 mb-4">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h3 className="font-bold">デッキ内のカード</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold">デッキ内のカード</h3>
+            <button
+              onClick={() => setShowFilter(!showFilter)}
+              className={`text-sm px-2 py-1 rounded ${showFilter || isFilterActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              🔍 絞り込み{isFilterActive && ` (${filteredTotalCards}/${totalCards})`}
+            </button>
+            {isFilterActive && (
+              <button
+                onClick={() => {
+                  setFilterType('');
+                  setFilterCost('');
+                  setFilterColor('');
+                  setFilterCounter('');
+                  setFilterPower('');
+                  setFilterAttribute('');
+                  setFilterFeature('');
+                  setFilterTrigger('');
+                  setFilterText('');
+                }}
+                className="text-xs text-red-600 hover:text-red-800"
+              >
+                ✕ クリア
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-3">
             <span className={`font-medium ${totalCards === 50 ? 'text-green-600' : totalCards > 50 ? 'text-red-600' : 'text-gray-600'}`}>
               {totalCards}/50枚
@@ -411,20 +532,162 @@ export default function DeckPreview({
           </div>
         </div>
         
+        {/* フィルターパネル */}
+        {showFilter && (
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg space-y-3">
+            {/* 1行目：タイプ、コスト、色、カウンター */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {/* タイプフィルター */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">タイプ</label>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">すべて</option>
+                  {filterOptions.types.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* コストフィルター */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">コスト</label>
+                <select
+                  value={filterCost}
+                  onChange={(e) => setFilterCost(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">すべて</option>
+                  {filterOptions.costs.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* 色フィルター */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">色</label>
+                <select
+                  value={filterColor}
+                  onChange={(e) => setFilterColor(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">すべて</option>
+                  {filterOptions.colors.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* カウンターフィルター */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">カウンター</label>
+                <select
+                  value={filterCounter}
+                  onChange={(e) => setFilterCounter(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">すべて</option>
+                  {filterOptions.counters.map(c => (
+                    <option key={c} value={c}>{c === 0 ? '0' : `+${c}`}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {/* 2行目：パワー、属性、トリガー、特徴 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {/* パワーフィルター */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">パワー</label>
+                <select
+                  value={filterPower}
+                  onChange={(e) => setFilterPower(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">すべて</option>
+                  {filterOptions.powers.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* 属性フィルター */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">属性</label>
+                <select
+                  value={filterAttribute}
+                  onChange={(e) => setFilterAttribute(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">すべて</option>
+                  {filterOptions.attributes.map(a => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* トリガーフィルター */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">トリガー</label>
+                <select
+                  value={filterTrigger}
+                  onChange={(e) => setFilterTrigger(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">すべて</option>
+                  <option value="あり">あり</option>
+                  <option value="なし">なし</option>
+                </select>
+              </div>
+              
+              {/* 特徴フィルター */}
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">特徴</label>
+                <select
+                  value={filterFeature}
+                  onChange={(e) => setFilterFeature(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">すべて</option>
+                  {filterOptions.features.map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {/* 3行目：フリーワード */}
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">フリーワード（スペース区切りでAND検索）</label>
+              <input
+                type="text"
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                placeholder="カード名・効果テキスト・特徴など"
+                className="w-full border rounded px-2 py-1 text-sm"
+              />
+            </div>
+          </div>
+        )}
+        
         {initialLoading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>
-        ) : deckCards.length === 0 ? (
+        ) : filteredDeckCards.length === 0 ? (
           <p className="text-gray-500 text-center py-8">
-            デッキにカードが追加されていません
+            {isFilterActive ? '条件に一致するカードがありません' : 'デッキにカードが追加されていません'}
           </p>
         ) : (
           <div 
             className="grid gap-1 sm:gap-2"
             style={{ gridTemplateColumns: `repeat(${colsCount}, minmax(0, 1fr))` }}
           >
-            {deckCards.map(({ card, count }, idx) => {
+            {filteredDeckCards.map(({ card, count }, idx) => {
               const isUnlimited = UNLIMITED_CARDS.includes(card.card_id);
               const isCompact = colsCount >= 5;
               const isBlankCard = !card.image_url;
