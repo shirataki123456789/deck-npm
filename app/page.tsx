@@ -3,11 +3,40 @@
 import { useState } from 'react';
 import SearchMode from '@/components/SearchMode';
 import DeckMode from '@/components/DeckMode';
+import MultiDeckMode from '@/components/MultiDeckMode';
 
-type Mode = 'search' | 'deck';
+type Mode = 'search' | 'deck' | 'multi';
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>('search');
+  
+  // マルチデッキモードは全画面表示
+  if (mode === 'multi') {
+    return (
+      <div className="min-h-screen flex flex-col">
+        {/* マルチデッキ用ヘッダー（モード切替のみ） */}
+        <div className="bg-gray-800 px-2 py-1 flex items-center gap-2">
+          <button
+            onClick={() => setMode('search')}
+            className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600"
+          >
+            🔍 検索
+          </button>
+          <button
+            onClick={() => setMode('deck')}
+            className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600"
+          >
+            🧱 通常
+          </button>
+          <span className="text-xs text-gray-400">|</span>
+          <span className="text-xs text-white font-medium">🗂️ マルチデッキ編集中</span>
+        </div>
+        <div className="flex-1">
+          <MultiDeckMode />
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
@@ -41,6 +70,16 @@ export default function Home() {
               >
                 🧱 デッキ作成
               </button>
+              <button
+                onClick={() => setMode('multi')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  mode === 'multi'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                🗂️ マルチデッキ
+              </button>
             </div>
           </div>
         </div>
@@ -56,23 +95,36 @@ export default function Home() {
         <div className="flex">
           <button
             onClick={() => setMode('search')}
-            className={`flex-1 py-4 text-center font-medium transition-colors ${
+            className={`flex-1 py-3 text-center font-medium transition-colors ${
               mode === 'search'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700'
             }`}
           >
-            🔍 カード検索
+            <div className="text-lg">🔍</div>
+            <div className="text-xs">検索</div>
           </button>
           <button
             onClick={() => setMode('deck')}
-            className={`flex-1 py-4 text-center font-medium transition-colors ${
+            className={`flex-1 py-3 text-center font-medium transition-colors ${
               mode === 'deck'
                 ? 'bg-green-600 text-white'
                 : 'bg-gray-100 text-gray-700'
             }`}
           >
-            🧱 デッキ作成
+            <div className="text-lg">🧱</div>
+            <div className="text-xs">デッキ</div>
+          </button>
+          <button
+            onClick={() => setMode('multi')}
+            className={`flex-1 py-3 text-center font-medium transition-colors ${
+              mode === 'multi'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            <div className="text-lg">🗂️</div>
+            <div className="text-xs">マルチ</div>
           </button>
         </div>
       </nav>
