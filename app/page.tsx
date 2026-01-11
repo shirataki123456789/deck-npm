@@ -9,36 +9,7 @@ type Mode = 'search' | 'deck' | 'multi';
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>('search');
-  
-  // マルチデッキモードは全画面表示
-  if (mode === 'multi') {
-    return (
-      <div className="min-h-screen flex flex-col">
-        {/* マルチデッキ用ヘッダー（モード切替のみ） */}
-        <div className="bg-gray-800 px-2 py-1 flex items-center gap-2">
-          <button
-            onClick={() => setMode('search')}
-            className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600"
-          >
-            🔍 検索
-          </button>
-          <button
-            onClick={() => setMode('deck')}
-            className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600"
-          >
-            🧱 通常
-          </button>
-          <span className="text-xs text-gray-400">|</span>
-          <span className="text-xs text-white font-medium">🗂️ マルチデッキ編集中</span>
-        </div>
-        <div className="flex-1">
-          <MultiDeckMode />
-        </div>
-      </div>
-    );
-  }
-  
-  // search または deck モード
+
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
       {/* ヘッダー */}
@@ -73,7 +44,11 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setMode('multi')}
-                className="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300"
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  mode === 'multi'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
               >
                 🗂️ マルチデッキ
               </button>
@@ -84,7 +59,9 @@ export default function Home() {
       
       {/* メインコンテンツ */}
       <main>
-        {mode === 'search' ? <SearchMode /> : <DeckMode />}
+        {mode === 'search' && <SearchMode />}
+        {mode === 'deck' && <DeckMode />}
+        {mode === 'multi' && <MultiDeckMode />}
       </main>
       
       {/* モバイル用固定フッターナビ */}
@@ -114,7 +91,11 @@ export default function Home() {
           </button>
           <button
             onClick={() => setMode('multi')}
-            className="flex-1 py-3 text-center font-medium transition-colors bg-gray-100 text-gray-700"
+            className={`flex-1 py-3 text-center font-medium transition-colors ${
+              mode === 'multi'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-700'
+            }`}
           >
             <div className="text-lg">🗂️</div>
             <div className="text-xs">マルチ</div>
