@@ -38,6 +38,7 @@ export default function Home() {
     );
   }
   
+  // search または deck モード
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
       {/* ヘッダー */}
@@ -72,11 +73,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setMode('multi')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  mode === 'multi'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
+                className="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300"
               >
                 🗂️ マルチデッキ
               </button>
@@ -117,11 +114,7 @@ export default function Home() {
           </button>
           <button
             onClick={() => setMode('multi')}
-            className={`flex-1 py-3 text-center font-medium transition-colors ${
-              mode === 'multi'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-700'
-            }`}
+            className="flex-1 py-3 text-center font-medium transition-colors bg-gray-100 text-gray-700"
           >
             <div className="text-lg">🗂️</div>
             <div className="text-xs">マルチ</div>
