@@ -313,7 +313,7 @@ export function BatchExportModal({ isOpen, onClose, tabs, allCards }: BatchExpor
         const sortedCardIds = sortData.card_ids_sorted || Object.keys(tab.deck.cards);
 
         // カードリストを作成
-        const deckCards: { url?: string; card?: Card }[] = [];
+        const deckCards: { url: string; card?: Card; qrDataUrl?: string }[] = [];
         const cardUrls: string[] = [];
         
         for (const cardId of sortedCardIds) {
@@ -321,13 +321,9 @@ export function BatchExportModal({ isOpen, onClose, tabs, allCards }: BatchExpor
           if (!card) continue;
           const count = tab.deck.cards[cardId] || 0;
           for (let j = 0; j < count; j++) {
-            if (card.image_url) {
-              cardUrls.push(card.image_url);
-              deckCards.push({ url: card.image_url, card });
-            } else {
-              cardUrls.push('');
-              deckCards.push({ card });
-            }
+            const url = card.image_url || '';
+            cardUrls.push(url);
+            deckCards.push({ url, card });
           }
         }
 
@@ -363,7 +359,7 @@ export function BatchExportModal({ isOpen, onClose, tabs, allCards }: BatchExpor
           cardUrls,
           cards: deckCards,
           deckName: tab.name || tab.deck.name || 'デッキ',
-          qrDataUrl,
+          qrDataUrl: qrDataUrl || '',
           leaderColors: tab.leaderCard!.color,
           onProgress: () => {},
         });
