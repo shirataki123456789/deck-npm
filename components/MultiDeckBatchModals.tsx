@@ -195,7 +195,7 @@ async function extractQRFromImage(img: HTMLImageElement): Promise<string | null>
   const code = jsQR(imageData.data, imageData.width, imageData.height);
   if (code) return code.data;
 
-  // グリッド分割で検出を試行（デッキ画像の場合、QRは特定の位置にある）
+  // グリッド分割で検出を試行
   const regions = [
     { x: 0, y: 0, w: 0.3, h: 0.3 },           // 左上
     { x: 0.7, y: 0, w: 0.3, h: 0.3 },         // 右上
@@ -359,7 +359,8 @@ export function BatchExportModal({ isOpen, onClose, tabs, allCards }: BatchExpor
         // 画像生成
         const imageBlob = await generateDeckImage({
           leaderUrl: tab.leaderCard!.image_url || '',
-          leaderCard: tab.leaderCard,
+          // ↓ 修正箇所: null を undefined に変換
+          leaderCard: tab.leaderCard ?? undefined,
           cardUrls,
           cards: deckCards,
           deckName: tab.name || tab.deck.name || 'デッキ',
