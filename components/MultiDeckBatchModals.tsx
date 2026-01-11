@@ -359,7 +359,7 @@ export function BatchExportModal({ isOpen, onClose, tabs, allCards }: BatchExpor
         // 画像生成
         const imageBlob = await generateDeckImage({
           leaderUrl: tab.leaderCard!.image_url || '',
-          leaderCard: tab.leaderCard,
+          leaderCard: tab.leaderCard ?? undefined,
           cardUrls,
           cards: deckCards,
           deckName: tab.name || tab.deck.name || 'デッキ',
