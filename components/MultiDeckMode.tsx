@@ -366,7 +366,7 @@ export default function MultiDeckMode() {
         {activeTab.view === 'leader' && (
           <LeaderSelect
             onSelect={handleSelectLeader}
-            onImportDeck={async (text) => {
+            onImport={async (text) => {
               try {
                 const res = await fetch('/api/deck', {
                   method: 'POST',
@@ -387,7 +387,7 @@ export default function MultiDeckMode() {
               }
             }}
             blankLeaders={blankCards.filter(c => c.type === 'LEADER')}
-            onAddBlankLeader={handleAddBlankCard}
+            onCreateBlankLeader={handleAddBlankCard}
             onEditBlankLeader={() => {}}
             onDeleteBlankLeader={() => {}}
             existingCardIds={allCards.map(c => c.card_id)}
