@@ -313,20 +313,60 @@ export function BatchExportModal({ isOpen, onClose, tabs, allCards }: BatchExpor
         const sortedCardIds = sortData.card_ids_sorted || Object.keys(tab.deck.cards);
 
         // カードリストを作成
-        const deckCards = sortedCardIds.flatMap((cardId: string) => {
+        const deckCards: { url?: string; card?: Card }[] = [];
+        const cardUrls: string[] = [];
+        
+        for (const cardId of sortedCardIds) {
           const card = allCards.find(c => c.card_id === cardId);
-          if (!card) return [];
+          if (!card) continue;
           const count = tab.deck.cards[cardId] || 0;
-          return Array(count).fill(card);
-        });
+          for (let j = 0; j < count; j++) {
+            if (card.image_url) {
+              cardUrls.push(card.image_url);
+              deckCards.push({ url: card.image_url, card });
+            } else {
+              cardUrls.push('');
+              deckCards.push({ card });
+            }
+          }
+        }
+
+        // QRコードを生成
+        let qrDataUrl: string | undefined;
+        try {
+          const exportRes = await fetch('/api/deck', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'export', deck: tab.deck }),
+          });
+          const exportData = await exportRes.json();
+          
+          if (exportData.text) {
+            const qrRes = await fetch(`/api/qr?text=${encodeURIComponent(exportData.text)}`);
+            if (qrRes.ok) {
+              const qrBlob = await qrRes.blob();
+              qrDataUrl = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.readAsDataURL(qrBlob);
+              });
+            }
+          }
+        } catch (e) {
+          console.error('QR generation error:', e);
+        }
 
         // 画像生成
-        const imageBlob = await generateDeckImage(
-          tab.leaderCard!,
-          deckCards,
-          tab.name || tab.deck.name || 'デッキ',
-          () => {}
-        );
+        const imageBlob = await generateDeckImage({
+          leaderUrl: tab.leaderCard!.image_url || '',
+          leaderCard: tab.leaderCard,
+          cardUrls,
+          cards: deckCards,
+          deckName: tab.name || tab.deck.name || 'デッキ',
+          qrDataUrl,
+          leaderColors: tab.leaderCard!.color,
+          onProgress: () => {},
+        });
 
         // ダウンロード
         const url = URL.createObjectURL(imageBlob);
