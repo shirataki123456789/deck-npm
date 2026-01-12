@@ -255,11 +255,18 @@ export default function DeckSidebar({
         },
       });
       
+      // ファイル名: デッキ名_シリーズ名（リーダーIDから取得）
+      const seriesMatch = leaderCard.card_id.match(/^([A-Z]+\d+)/);
+      const seriesName = seriesMatch ? seriesMatch[1] : '';
+      const deckNameForFile = deck.name || 'deck';
+      const safeDeckName = deckNameForFile.replace(/[\\/:*?"<>|]/g, '_');
+      const fileName = seriesName ? `${safeDeckName}_${seriesName}.png` : `${safeDeckName}.png`;
+      
       // ダウンロード
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${deck.name || 'deck'}_image.png`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

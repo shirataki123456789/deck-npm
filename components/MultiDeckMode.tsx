@@ -49,6 +49,7 @@ export default function MultiDeckMode() {
   const [tabs, setTabs] = useState<DeckTab[]>([createNewTab('デッキ1')]);
   const [activeTabId, setActiveTabId] = useState(tabs[0].id);
   const [showGridView, setShowGridView] = useState(false);
+  const [gridColorFilter, setGridColorFilter] = useState<string[]>([]);
 
   // 一括操作モーダル
   const [showBatchImport, setShowBatchImport] = useState(false);
@@ -73,6 +74,39 @@ export default function MultiDeckMode() {
 
   // アクティブなタブ
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+
+  // 色フィルター定義
+  const colorOptions = [
+    { value: '赤', label: '赤', bgClass: 'bg-red-500' },
+    { value: '青', label: '青', bgClass: 'bg-blue-500' },
+    { value: '緑', label: '緑', bgClass: 'bg-green-500' },
+    { value: '紫', label: '紫', bgClass: 'bg-purple-500' },
+    { value: '黒', label: '黒', bgClass: 'bg-gray-800' },
+    { value: '黄', label: '黄', bgClass: 'bg-yellow-400' },
+  ];
+
+  // グリッドビュー用のフィルター済みタブ
+  const filteredTabs = gridColorFilter.length === 0
+    ? tabs
+    : tabs.filter(tab => {
+        if (!tab.leaderCard) return false;
+        return tab.leaderCard.color.some(c => gridColorFilter.includes(c));
+      });
+
+  // タブの並べ替え
+  const moveTab = (tabId: string, direction: 'left' | 'right') => {
+    setTabs(prev => {
+      const index = prev.findIndex(t => t.id === tabId);
+      if (index === -1) return prev;
+      
+      const newIndex = direction === 'left' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= prev.length) return prev;
+      
+      const newTabs = [...prev];
+      [newTabs[index], newTabs[newIndex]] = [newTabs[newIndex], newTabs[index]];
+      return newTabs;
+    });
+  };
 
   // タブを更新
   const updateTab = useCallback((tabId: string, updates: Partial<DeckTab>) => {
@@ -515,6 +549,9 @@ export default function MultiDeckMode() {
 
   const totalCards = Object.values(activeTab.deck.cards).reduce((sum, c) => sum + c, 0);
 
+  // 選択中タブのインデックス
+  const activeTabIndex = tabs.findIndex(t => t.id === activeTabId);
+
   return (
     <>
       {/* ツールバー（携帯でも見やすいように2段構成） */}
@@ -529,6 +566,35 @@ export default function MultiDeckMode() {
             {showGridView ? '📋 タブ表示' : '🔲 一覧'}
           </button>
           <button onClick={addTab} className="px-2 py-1.5 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300 rounded" title="新しいデッキ">＋ 追加</button>
+          {/* 並べ替えボタン */}
+          {!showGridView && tabs.length > 1 && (
+            <div className="flex items-center gap-0.5 ml-1">
+              <button
+                onClick={() => moveTab(activeTabId, 'left')}
+                disabled={activeTabIndex === 0}
+                className={`px-1.5 py-1 text-xs rounded ${
+                  activeTabIndex === 0
+                    ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                title="左へ移動"
+              >
+                ◀
+              </button>
+              <button
+                onClick={() => moveTab(activeTabId, 'right')}
+                disabled={activeTabIndex === tabs.length - 1}
+                className={`px-1.5 py-1 text-xs rounded ${
+                  activeTabIndex === tabs.length - 1
+                    ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                title="右へ移動"
+              >
+                ▶
+              </button>
+            </div>
+          )}
           <div className="ml-auto flex items-center gap-1">
             <button onClick={() => setShowBatchImport(true)} className="px-2 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">📥 読込</button>
             <button onClick={() => setShowBatchExport(true)} className="px-2 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600">📤 出力</button>
@@ -570,19 +636,78 @@ export default function MultiDeckMode() {
       {/* グリッド一覧モード */}
       {showGridView ? (
         <div className="p-4">
+          {/* 色フィルター */}
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-gray-600">色で絞込:</span>
+            {colorOptions.map(color => (
+              <button
+                key={color.value}
+                onClick={() => {
+                  setGridColorFilter(prev =>
+                    prev.includes(color.value)
+                      ? prev.filter(c => c !== color.value)
+                      : [...prev, color.value]
+                  );
+                }}
+                className={`w-7 h-7 rounded-full border-2 ${color.bgClass} ${
+                  gridColorFilter.includes(color.value)
+                    ? 'border-white ring-2 ring-offset-1 ring-gray-400'
+                    : 'border-transparent opacity-50 hover:opacity-100'
+                }`}
+                title={color.label}
+              />
+            ))}
+            {gridColorFilter.length > 0 && (
+              <button
+                onClick={() => setGridColorFilter([])}
+                className="text-xs text-gray-500 hover:text-gray-700 ml-2"
+              >
+                クリア
+              </button>
+            )}
+            <span className="text-xs text-gray-500 ml-auto">
+              {filteredTabs.length}/{tabs.length}件
+            </span>
+          </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {tabs.map(tab => {
+            {filteredTabs.map((tab, index) => {
               const tabTotal = Object.values(tab.deck.cards).reduce((sum, c) => sum + c, 0);
+              const originalIndex = tabs.findIndex(t => t.id === tab.id);
               return (
                 <div
                   key={tab.id}
-                  onClick={() => { setActiveTabId(tab.id); setShowGridView(false); }}
                   className={`relative cursor-pointer rounded-lg border-2 overflow-hidden hover:shadow-lg transition-shadow ${
                     activeTabId === tab.id ? 'border-blue-500' : 'border-gray-200'
                   }`}
                 >
+                  {/* 並べ替えボタン */}
+                  <div className="absolute top-1 left-1 right-1 flex justify-between z-10">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveTab(tab.id, 'left'); }}
+                      disabled={originalIndex === 0}
+                      className={`w-6 h-6 rounded bg-black/50 text-white text-xs flex items-center justify-center ${
+                        originalIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/70'
+                      }`}
+                    >
+                      ◀
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveTab(tab.id, 'right'); }}
+                      disabled={originalIndex === tabs.length - 1}
+                      className={`w-6 h-6 rounded bg-black/50 text-white text-xs flex items-center justify-center ${
+                        originalIndex === tabs.length - 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/70'
+                      }`}
+                    >
+                      ▶
+                    </button>
+                  </div>
+                  
                   {/* リーダー画像または空の表示 */}
-                  <div className="aspect-[7/10] bg-gray-100 flex items-center justify-center">
+                  <div
+                    onClick={() => { setActiveTabId(tab.id); setShowGridView(false); }}
+                    className="aspect-[7/10] bg-gray-100 flex items-center justify-center"
+                  >
                     {tab.leaderCard?.image_url ? (
                       <img src={tab.leaderCard.image_url} alt={tab.leaderCard.name} className="w-full h-full object-cover" />
                     ) : (
