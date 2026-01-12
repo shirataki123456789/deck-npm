@@ -52,6 +52,7 @@ export default function MultiDeckMode() {
   const [showGridView, setShowGridView] = useState(false);
   const [gridColorFilter, setGridColorFilter] = useState<string[]>([]);
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const [gridColsCount, setGridColsCount] = useState(5);
 
   // 一括操作モーダル
   const [showBatchImport, setShowBatchImport] = useState(false);
@@ -751,6 +752,15 @@ export default function MultiDeckMode() {
               </button>
             )}
             <div className="ml-auto flex items-center gap-2">
+              <select
+                value={gridColsCount}
+                onChange={(e) => setGridColsCount(Number(e.target.value))}
+                className="text-xs border rounded px-1 py-0.5"
+              >
+                {Array.from({ length: 15 }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={n}>{n}列</option>
+                ))}
+              </select>
               <button
                 onClick={sortTabs}
                 className="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600"
@@ -764,7 +774,10 @@ export default function MultiDeckMode() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div 
+            className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${gridColsCount}, minmax(0, 1fr))` }}
+          >
             {filteredTabs.map((tab, index) => {
               const tabTotal = Object.values(tab.deck.cards).reduce((sum, c) => sum + c, 0);
               const originalIndex = tabs.findIndex(t => t.id === tab.id);
