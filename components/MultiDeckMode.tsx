@@ -173,10 +173,12 @@ export default function MultiDeckMode() {
 
   // === デッキ操作 ===
   const handleSelectLeader = (card: Card) => {
+    const defaultName = `${card.color.join('')}${card.name}`;
     updateTab(activeTabId, {
       leaderCard: card,
-      deck: { name: '', leader: card.card_id, cards: {} },
+      deck: { name: defaultName, leader: card.card_id, cards: {} },
       view: 'preview',
+      name: defaultName,
     });
     setFilter(prev => ({ ...prev, leader_colors: card.color }));
   };
@@ -266,8 +268,8 @@ export default function MultiDeckMode() {
           cards: { ...data.deck.cards, ...blankCardCounts },
         };
 
-        // デッキ名があればタブ名を更新
-        const deckName = data.deck.name || '';
+        // デッキ名があればタブ名を更新、なければ色+リーダー名
+        let deckName = data.deck.name || '';
 
         if (blankLeaderFromQR) {
           deckWithBlankCards.leader = blankLeaderFromQR.card_id;
@@ -275,12 +277,18 @@ export default function MultiDeckMode() {
             ? activeTab.blankCards
             : [...activeTab.blankCards, blankLeaderFromQR];
           
+          // デッキ名がなければ色+リーダー名を生成
+          if (!deckName) {
+            deckName = `${blankLeaderFromQR.color.join('')}${blankLeaderFromQR.name}`;
+            deckWithBlankCards.name = deckName;
+          }
+          
           updateTab(activeTabId, {
             deck: deckWithBlankCards,
             leaderCard: blankLeaderFromQR,
             view: 'preview',
             blankCards: newBlankCards,
-            ...(deckName && { name: deckName }),
+            name: deckName,
           });
         } else if (data.deck.leader) {
           let foundLeader = allCards.find(c => c.card_id === data.deck.leader);
@@ -297,11 +305,17 @@ export default function MultiDeckMode() {
           }
 
           if (foundLeader) {
+            // デッキ名がなければ色+リーダー名を生成
+            if (!deckName) {
+              deckName = `${foundLeader.color.join('')}${foundLeader.name}`;
+              deckWithBlankCards.name = deckName;
+            }
+            
             updateTab(activeTabId, {
               deck: deckWithBlankCards,
               leaderCard: foundLeader,
               view: 'preview',
-              ...(deckName && { name: deckName }),
+              name: deckName,
             });
           } else {
             alert('リーダーカードが見つかりませんでした: ' + data.deck.leader);
@@ -393,8 +407,15 @@ export default function MultiDeckMode() {
             }
           }
 
-          // デッキ名があればそれを使用、なければファイル名
-          const tabName = data.deck.name || fileName;
+          // デッキ名: deck.name → 色+リーダー名 → ファイル名
+          let tabName = data.deck.name || '';
+          if (!tabName && leaderCard) {
+            tabName = `${leaderCard.color.join('')}${leaderCard.name}`;
+          }
+          if (!tabName) {
+            tabName = fileName;
+          }
+          deckWithBlankCards.name = tabName;
 
           const newTab: DeckTab = {
             id: generateTabId(),
@@ -416,8 +437,6 @@ export default function MultiDeckMode() {
   const handleJSONImport = async (jsonData: any[]) => {
     for (const item of jsonData) {
       try {
-        const tabName = item.name || `デッキ${tabs.length + 1}`;
-        
         // リーダーを検索
         let leaderCard: Card | null = null;
         if (item.leader?.card_id) {
@@ -431,6 +450,15 @@ export default function MultiDeckMode() {
             const leaderData = await leaderRes.json();
             leaderCard = leaderData.cards?.find((c: Card) => c.card_id === item.leader.card_id) || null;
           }
+        }
+
+        // デッキ名: item.name → 色+リーダー名 → デフォルト
+        let tabName = item.name || '';
+        if (!tabName && leaderCard) {
+          tabName = `${leaderCard.color.join('')}${leaderCard.name}`;
+        }
+        if (!tabName) {
+          tabName = `デッキ${tabs.length + 1}`;
         }
 
         // カード枚数を構築
@@ -633,7 +661,14 @@ export default function MultiDeckMode() {
         {activeTab.view !== 'leader' && (
           <DeckSidebar
             deck={activeTab.deck}
-            setDeck={(newDeck) => updateTab(activeTabId, { deck: newDeck })}
+            setDeck={(newDeck) => {
+              // デッキ名が変更されたらタブ名も同期
+              const updates: Partial<DeckTab> = { deck: newDeck };
+              if (newDeck.name && newDeck.name !== activeTab.deck.name) {
+                updates.name = newDeck.name;
+              }
+              updateTab(activeTabId, updates);
+            }}
             leaderCard={activeTab.leaderCard}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
@@ -840,7 +875,7 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
 
   const exportJSON = () => {
     const data = tabs.filter(t => t.leaderCard).map(tab => ({
-      name: tab.name,
+      name: tab.deck.name || tab.name || 'デッキ',
       leader: { card_id: tab.leaderCard!.card_id, name: tab.leaderCard!.name, color: tab.leaderCard!.color },
       cards: Object.entries(tab.deck.cards).map(([cardId, count]) => {
         const card = [...allCards, ...tab.blankCards].find(c => c.card_id === cardId);
@@ -857,8 +892,9 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
       try {
         const res = await fetch('/api/deck', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'export', deck: tab.deck }) });
         const data = await res.json();
-        texts.push(`=== ${tab.name} ===\n${data.text || ''}\n`);
-      } catch { texts.push(`=== ${tab.name} ===\nエラー\n`); }
+        const deckName = tab.deck.name || tab.name || 'デッキ';
+        texts.push(`=== ${deckName} ===\n${data.text || ''}\n`);
+      } catch { texts.push(`=== ${tab.deck.name || tab.name || 'デッキ'} ===\nエラー\n`); }
     }
     downloadFile(texts.join('\n'), `decks_${new Date().toISOString().split('T')[0]}.txt`, 'text/plain');
   };
