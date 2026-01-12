@@ -266,6 +266,9 @@ export default function MultiDeckMode() {
           cards: { ...data.deck.cards, ...blankCardCounts },
         };
 
+        // デッキ名があればタブ名を更新
+        const deckName = data.deck.name || '';
+
         if (blankLeaderFromQR) {
           deckWithBlankCards.leader = blankLeaderFromQR.card_id;
           const newBlankCards = activeTab.blankCards.some(c => c.card_id === blankLeaderFromQR!.card_id)
@@ -277,6 +280,7 @@ export default function MultiDeckMode() {
             leaderCard: blankLeaderFromQR,
             view: 'preview',
             blankCards: newBlankCards,
+            ...(deckName && { name: deckName }),
           });
         } else if (data.deck.leader) {
           let foundLeader = allCards.find(c => c.card_id === data.deck.leader);
@@ -297,6 +301,7 @@ export default function MultiDeckMode() {
               deck: deckWithBlankCards,
               leaderCard: foundLeader,
               view: 'preview',
+              ...(deckName && { name: deckName }),
             });
           } else {
             alert('リーダーカードが見つかりませんでした: ' + data.deck.leader);
@@ -337,7 +342,7 @@ export default function MultiDeckMode() {
 
   // 一括インポート
   const handleBatchImport = async (deckTexts: { name: string; text: string }[]) => {
-    for (const { name, text } of deckTexts) {
+    for (const { name: fileName, text } of deckTexts) {
       try {
         let cleanText = text;
         let blankCardCounts: Record<string, number> = {};
@@ -388,9 +393,12 @@ export default function MultiDeckMode() {
             }
           }
 
+          // デッキ名があればそれを使用、なければファイル名
+          const tabName = data.deck.name || fileName;
+
           const newTab: DeckTab = {
             id: generateTabId(),
-            name,
+            name: tabName,
             deck: deckWithBlankCards,
             leaderCard,
             view: leaderCard ? 'preview' : 'leader',
@@ -399,7 +407,57 @@ export default function MultiDeckMode() {
           setTabs(prev => [...prev, newTab]);
         }
       } catch (error) {
-        console.error(`Import error for ${name}:`, error);
+        console.error(`Import error for ${fileName}:`, error);
+      }
+    }
+  };
+
+  // JSONインポート
+  const handleJSONImport = async (jsonData: any[]) => {
+    for (const item of jsonData) {
+      try {
+        const tabName = item.name || `デッキ${tabs.length + 1}`;
+        
+        // リーダーを検索
+        let leaderCard: Card | null = null;
+        if (item.leader?.card_id) {
+          leaderCard = allCards.find(c => c.card_id === item.leader.card_id) || null;
+          if (!leaderCard) {
+            const leaderRes = await fetch('/api/cards', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['LEADER'], parallel_mode: 'both' }),
+            });
+            const leaderData = await leaderRes.json();
+            leaderCard = leaderData.cards?.find((c: Card) => c.card_id === item.leader.card_id) || null;
+          }
+        }
+
+        // カード枚数を構築
+        const cards: Record<string, number> = {};
+        if (item.cards && Array.isArray(item.cards)) {
+          for (const cardItem of item.cards) {
+            if (cardItem.card_id && cardItem.count) {
+              cards[cardItem.card_id] = cardItem.count;
+            }
+          }
+        }
+
+        const newTab: DeckTab = {
+          id: generateTabId(),
+          name: tabName,
+          deck: {
+            name: tabName,
+            leader: item.leader?.card_id || '',
+            cards,
+          },
+          leaderCard,
+          view: leaderCard ? 'preview' : 'leader',
+          blankCards: [],
+        };
+        setTabs(prev => [...prev, newTab]);
+      } catch (error) {
+        console.error(`JSON import error:`, error);
       }
     }
   };
@@ -607,6 +665,7 @@ export default function MultiDeckMode() {
         <BatchImportModal
           onClose={() => setShowBatchImport(false)}
           onImport={handleBatchImport}
+          onJSONImport={handleJSONImport}
         />
       )}
 
@@ -623,14 +682,35 @@ export default function MultiDeckMode() {
 }
 
 // 一括インポートモーダル
-function BatchImportModal({ onClose, onImport }: { onClose: () => void; onImport: (decks: { name: string; text: string }[]) => void }) {
+function BatchImportModal({ onClose, onImport, onJSONImport }: { 
+  onClose: () => void; 
+  onImport: (decks: { name: string; text: string }[]) => void;
+  onJSONImport: (jsonData: any[]) => void;
+}) {
+  const [mode, setMode] = useState<'image' | 'json'>('image');
   const [images, setImages] = useState<File[]>([]);
   const [results, setResults] = useState<{ name: string; text: string; status: string }[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [jsonText, setJsonText] = useState('');
+  const [jsonError, setJsonError] = useState('');
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setImages(Array.from(e.target.files || []));
+    const files = Array.from(e.target.files || []);
+    
+    // JSONファイルかどうかチェック
+    if (files.length === 1 && files[0].name.endsWith('.json')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setJsonText(e.target?.result as string || '');
+        setMode('json');
+      };
+      reader.readAsText(files[0]);
+      return;
+    }
+    
+    setImages(files);
     setResults([]);
+    setMode('image');
   };
 
   const processImages = async () => {
@@ -664,35 +744,88 @@ function BatchImportModal({ onClose, onImport }: { onClose: () => void; onImport
     }
   };
 
+  const handleJSONImport = () => {
+    try {
+      const data = JSON.parse(jsonText);
+      if (!Array.isArray(data)) {
+        setJsonError('JSONは配列形式である必要があります');
+        return;
+      }
+      onJSONImport(data);
+      onClose();
+    } catch (e) {
+      setJsonError('JSONの解析に失敗しました');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="text-lg font-bold">📥 デッキ画像一括インポート</h2>
+          <h2 className="text-lg font-bold">📥 一括インポート</h2>
           <button onClick={onClose} className="text-2xl text-gray-500 hover:text-gray-700">×</button>
         </div>
+
+        {/* モード切替タブ */}
+        <div className="flex border-b">
+          <button
+            onClick={() => setMode('image')}
+            className={`flex-1 py-2 text-sm font-medium ${mode === 'image' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
+          >
+            🖼️ 画像からQR読取
+          </button>
+          <button
+            onClick={() => setMode('json')}
+            className={`flex-1 py-2 text-sm font-medium ${mode === 'json' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
+          >
+            📋 JSONインポート
+          </button>
+        </div>
+
         <div className="p-4 flex-1 overflow-y-auto space-y-4">
-          <input type="file" accept="image/*" multiple onChange={handleFileSelect} className="block w-full" />
-          {images.length > 0 && <p className="text-sm text-gray-600">{images.length}件選択中</p>}
-          {images.length > 0 && results.length === 0 && (
-            <button onClick={processImages} disabled={processing} className="btn btn-primary w-full">
-              {processing ? '処理中...' : '🔍 QRコードを読み取る'}
-            </button>
-          )}
-          {results.length > 0 && (
-            <div className="space-y-2">
-              {results.map((r, i) => (
-                <div key={i} className={`p-3 rounded border ${r.text ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                  <div className="flex justify-between"><span className="font-medium">{r.name}</span><span className="text-sm">{r.status}</span></div>
+          {mode === 'image' ? (
+            <>
+              <input type="file" accept="image/*,.json" multiple onChange={handleFileSelect} className="block w-full" />
+              {images.length > 0 && <p className="text-sm text-gray-600">{images.length}件選択中</p>}
+              {images.length > 0 && results.length === 0 && (
+                <button onClick={processImages} disabled={processing} className="btn btn-primary w-full">
+                  {processing ? '処理中...' : '🔍 QRコードを読み取る'}
+                </button>
+              )}
+              {results.length > 0 && (
+                <div className="space-y-2">
+                  {results.map((r, i) => (
+                    <div key={i} className={`p-3 rounded border ${r.text ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                      <div className="flex justify-between"><span className="font-medium">{r.name}</span><span className="text-sm">{r.status}</span></div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600">
+                一括出力で生成したJSONファイルを貼り付けるか、ファイルを選択してください
+              </p>
+              <textarea
+                value={jsonText}
+                onChange={(e) => { setJsonText(e.target.value); setJsonError(''); }}
+                placeholder='[{"name": "デッキ名", "leader": {"card_id": "OP01-001"}, "cards": [{"card_id": "OP01-004", "count": 4}]}]'
+                className="w-full h-48 border rounded p-2 text-sm font-mono"
+              />
+              {jsonError && <p className="text-red-500 text-sm">{jsonError}</p>}
+              <input type="file" accept=".json" onChange={handleFileSelect} className="block w-full text-sm" />
+            </>
           )}
         </div>
+
         <div className="p-4 border-t flex gap-2 justify-end">
           <button onClick={onClose} className="btn btn-secondary">キャンセル</button>
-          {results.filter(r => r.text).length > 0 && (
+          {mode === 'image' && results.filter(r => r.text).length > 0 && (
             <button onClick={handleImport} className="btn btn-primary">{results.filter(r => r.text).length}件をインポート</button>
+          )}
+          {mode === 'json' && jsonText.trim() && (
+            <button onClick={handleJSONImport} className="btn btn-primary">JSONをインポート</button>
           )}
         </div>
       </div>
@@ -778,10 +911,16 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
           leaderColors: tab.leaderCard!.color,
         });
 
+        // ファイル名: デッキ名_シリーズ名（リーダーIDから取得）
+        const seriesMatch = tab.leaderCard!.card_id.match(/^([A-Z]+\d+)/);
+        const seriesName = seriesMatch ? seriesMatch[1] : '';
+        const safeDeckName = (tab.name || 'デッキ').replace(/[\\/:*?"<>|]/g, '_');
+        const fileName = seriesName ? `${safeDeckName}_${seriesName}.png` : `${safeDeckName}.png`;
+
         const url = URL.createObjectURL(imageBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${tab.name}_${i + 1}.png`;
+        a.download = fileName;
         a.click();
         URL.revokeObjectURL(url);
         await new Promise(r => setTimeout(r, 500));
