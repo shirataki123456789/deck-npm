@@ -87,7 +87,9 @@ interface DeckPreviewProps {
   totalDecks?: number;
   // 必要リスト機能
   onUpdateWantedCount?: (card: Card, count: number) => void;
+  onUpdateOwnedCount?: (card: Card, owned: number) => void;
   getWantedCount?: (cardId: string) => number;
+  getOwnedCount?: (cardId: string) => number;
 }
 
 interface DeckCardInfo {
@@ -119,7 +121,9 @@ export default function DeckPreview({
   currentDeckIndex,
   totalDecks,
   onUpdateWantedCount,
+  onUpdateOwnedCount,
   getWantedCount,
+  getOwnedCount,
 }: DeckPreviewProps) {
   const [sortedCardIds, setSortedCardIds] = useState<string[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -888,7 +892,9 @@ export default function DeckPreview({
         card={zoomedCard}
         onClose={() => setZoomedCard(null)}
         onUpdateWantedCount={onUpdateWantedCount}
+        onUpdateOwnedCount={onUpdateOwnedCount}
         wantedCount={zoomedCard && getWantedCount ? getWantedCount(zoomedCard.card_id) : 0}
+        ownedCount={zoomedCard && getOwnedCount ? getOwnedCount(zoomedCard.card_id) : 0}
       />
     </div>
   );

@@ -16,7 +16,9 @@ interface CardGridProps {
   canAddCard?: (cardId: string) => boolean;
   // 必要リスト機能
   onUpdateWantedCount?: (card: Card, count: number) => void;
+  onUpdateOwnedCount?: (card: Card, owned: number) => void;
   getWantedCount?: (cardId: string) => number;
+  getOwnedCount?: (cardId: string) => number;
 }
 
 export default function CardGrid({
@@ -29,7 +31,9 @@ export default function CardGrid({
   getCardCount,
   canAddCard,
   onUpdateWantedCount,
+  onUpdateOwnedCount,
   getWantedCount,
+  getOwnedCount,
 }: CardGridProps) {
   const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
   
@@ -62,7 +66,9 @@ export default function CardGrid({
         card={zoomedCard}
         onClose={() => setZoomedCard(null)}
         onUpdateWantedCount={onUpdateWantedCount}
+        onUpdateOwnedCount={onUpdateOwnedCount}
         wantedCount={zoomedCard && getWantedCount ? getWantedCount(zoomedCard.card_id) : 0}
+        ownedCount={zoomedCard && getOwnedCount ? getOwnedCount(zoomedCard.card_id) : 0}
       />
     </>
   );

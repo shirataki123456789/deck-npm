@@ -27,7 +27,7 @@ export default function SearchMode() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // 必要カードリスト
-  const { updateWantedCount, getWantedCount } = useWantedCards();
+  const { updateWantedCount, updateOwnedCount, getWantedCount, getOwnedCount } = useWantedCards();
   
   // フィルタメタデータを取得
   useEffect(() => {
@@ -171,7 +171,9 @@ export default function SearchMode() {
             cards={cards}
             colsCount={colsCount}
             onUpdateWantedCount={updateWantedCount}
+            onUpdateOwnedCount={updateOwnedCount}
             getWantedCount={getWantedCount}
+            getOwnedCount={getOwnedCount}
           />
         )}
       </div>

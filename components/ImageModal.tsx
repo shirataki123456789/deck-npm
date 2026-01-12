@@ -8,7 +8,9 @@ interface ImageModalProps {
   card: Card | null;
   onClose: () => void;
   onUpdateWantedCount?: (card: Card, count: number) => void;
+  onUpdateOwnedCount?: (card: Card, owned: number) => void;
   wantedCount?: number;
+  ownedCount?: number;
 }
 
 // ブランクカードをCanvasで描画（モーダル用大きめサイズ）
@@ -71,7 +73,14 @@ function BlankCardCanvasLarge({ card }: { card: Card }) {
   );
 }
 
-export default function ImageModal({ card, onClose, onUpdateWantedCount, wantedCount = 0 }: ImageModalProps) {
+export default function ImageModal({ 
+  card, 
+  onClose, 
+  onUpdateWantedCount, 
+  onUpdateOwnedCount,
+  wantedCount = 0,
+  ownedCount = 0,
+}: ImageModalProps) {
   // ESCキーで閉じる
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -95,6 +104,7 @@ export default function ImageModal({ card, onClose, onUpdateWantedCount, wantedC
   
   // 画像URLがない場合はブランクカード風に表示
   const isBlankCard = !card.image_url;
+  const missing = Math.max(0, wantedCount - ownedCount);
   
   return (
     <div 
@@ -182,38 +192,77 @@ export default function ImageModal({ card, onClose, onUpdateWantedCount, wantedC
             
             {/* 必要リスト（即時反映） */}
             {onUpdateWantedCount && (
-              <div className="mt-3 p-2 bg-orange-50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-orange-700 flex-shrink-0">📋 必要リスト:</span>
-                  <div className="flex-1" />
-                  <div className="flex items-center gap-1">
+              <div className={`mt-3 p-3 rounded-lg border-2 ${
+                wantedCount > 0 && missing > 0 
+                  ? 'bg-red-50 border-red-300' 
+                  : wantedCount > 0 && missing === 0
+                    ? 'bg-green-50 border-green-300'
+                    : 'bg-orange-50 border-orange-200'
+              }`}>
+                <div className="text-sm font-medium text-gray-700 mb-2">📋 必要カードリスト</div>
+                
+                {/* 必要数 */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs text-gray-500 w-12">必要:</span>
+                  <button
+                    onClick={() => onUpdateWantedCount(card, Math.max(0, wantedCount - 1))}
+                    disabled={wantedCount <= 0}
+                    className={`w-8 h-8 rounded text-lg font-bold ${
+                      wantedCount > 0 
+                        ? 'bg-red-500 text-white hover:bg-red-600' 
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    -
+                  </button>
+                  <span className={`w-10 text-center text-lg font-bold ${
+                    wantedCount > 0 ? 'text-orange-600' : 'text-gray-400'
+                  }`}>
+                    {wantedCount}
+                  </span>
+                  <button
+                    onClick={() => onUpdateWantedCount(card, wantedCount + 1)}
+                    className="w-8 h-8 bg-green-500 text-white rounded text-lg font-bold hover:bg-green-600"
+                  >
+                    +
+                  </button>
+                </div>
+                
+                {/* 所持数 */}
+                {onUpdateOwnedCount && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 w-12">所持:</span>
                     <button
-                      onClick={() => onUpdateWantedCount(card, Math.max(0, wantedCount - 1))}
-                      disabled={wantedCount <= 0}
+                      onClick={() => onUpdateOwnedCount(card, Math.max(0, ownedCount - 1))}
+                      disabled={ownedCount <= 0}
                       className={`w-8 h-8 rounded text-lg font-bold ${
-                        wantedCount > 0 
-                          ? 'bg-red-500 text-white hover:bg-red-600' 
+                        ownedCount > 0 
+                          ? 'bg-orange-500 text-white hover:bg-orange-600' 
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                       }`}
                     >
                       -
                     </button>
                     <span className={`w-10 text-center text-lg font-bold ${
-                      wantedCount > 0 ? 'text-orange-600' : 'text-gray-400'
+                      ownedCount > 0 ? 'text-blue-600' : 'text-gray-400'
                     }`}>
-                      {wantedCount}
+                      {ownedCount}
                     </span>
                     <button
-                      onClick={() => onUpdateWantedCount(card, wantedCount + 1)}
-                      className="w-8 h-8 bg-green-500 text-white rounded text-lg font-bold hover:bg-green-600"
+                      onClick={() => onUpdateOwnedCount(card, ownedCount + 1)}
+                      className="w-8 h-8 bg-blue-500 text-white rounded text-lg font-bold hover:bg-blue-600"
                     >
                       +
                     </button>
                   </div>
-                </div>
+                )}
+                
+                {/* ステータス表示 */}
                 {wantedCount > 0 && (
-                  <div className="mt-1 text-xs text-orange-600 text-center">
-                    ✓ {wantedCount}枚登録中
+                  <div className={`mt-2 text-sm text-center font-medium ${
+                    missing > 0 ? 'text-red-600' : 'text-green-600'
+                  }`}>
+                    {missing > 0 ? `❗ 不足: ${missing}枚` : '✓ 揃っています'}
                   </div>
                 )}
               </div>
