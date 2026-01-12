@@ -12,7 +12,7 @@ interface WantedCardsContextType {
   wantedCards: WantedCard[];
   addWantedCard: (card: Card, count?: number) => void;
   removeWantedCard: (cardId: string) => void;
-  updateWantedCount: (cardId: string, count: number) => void;
+  updateWantedCount: (card: Card, count: number) => void;
   clearWantedCards: () => void;
   getWantedCount: (cardId: string) => number;
   totalWantedCount: number;
@@ -41,13 +41,20 @@ export function WantedCardsProvider({ children }: { children: ReactNode }) {
     setWantedCards(prev => prev.filter(w => w.card.card_id !== cardId));
   }, []);
 
-  const updateWantedCount = useCallback((cardId: string, count: number) => {
+  const updateWantedCount = useCallback((card: Card, count: number) => {
     if (count <= 0) {
-      setWantedCards(prev => prev.filter(w => w.card.card_id !== cardId));
+      setWantedCards(prev => prev.filter(w => w.card.card_id !== card.card_id));
     } else {
-      setWantedCards(prev => prev.map(w => 
-        w.card.card_id === cardId ? { ...w, count } : w
-      ));
+      setWantedCards(prev => {
+        const existing = prev.find(w => w.card.card_id === card.card_id);
+        if (existing) {
+          return prev.map(w => 
+            w.card.card_id === card.card_id ? { ...w, count } : w
+          );
+        } else {
+          return [...prev, { card, count }];
+        }
+      });
     }
   }, []);
 
@@ -290,14 +297,14 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => updateWantedCount(w.card.card_id, w.count - 1)}
+                      onClick={() => updateWantedCount(w.card, w.count - 1)}
                       className="w-6 h-6 bg-gray-200 rounded text-sm hover:bg-gray-300"
                     >
                       -
                     </button>
                     <span className="w-6 text-center text-sm font-medium">{w.count}</span>
                     <button
-                      onClick={() => updateWantedCount(w.card.card_id, w.count + 1)}
+                      onClick={() => updateWantedCount(w.card, w.count + 1)}
                       className="w-6 h-6 bg-gray-200 rounded text-sm hover:bg-gray-300"
                     >
                       +

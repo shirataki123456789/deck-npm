@@ -27,7 +27,7 @@ export default function SearchMode() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // 必要カードリスト
-  const { addWantedCard, getWantedCount } = useWantedCards();
+  const { updateWantedCount, getWantedCount } = useWantedCards();
   
   // フィルタメタデータを取得
   useEffect(() => {
@@ -170,7 +170,7 @@ export default function SearchMode() {
           <CardGrid
             cards={cards}
             colsCount={colsCount}
-            onAddToWanted={addWantedCard}
+            onUpdateWantedCount={updateWantedCount}
             getWantedCount={getWantedCount}
           />
         )}

@@ -86,7 +86,7 @@ interface DeckPreviewProps {
   currentDeckIndex?: number;
   totalDecks?: number;
   // 必要リスト機能
-  onAddToWanted?: (card: Card, count: number) => void;
+  onUpdateWantedCount?: (card: Card, count: number) => void;
   getWantedCount?: (cardId: string) => number;
 }
 
@@ -118,7 +118,7 @@ export default function DeckPreview({
   hasNextDeck,
   currentDeckIndex,
   totalDecks,
-  onAddToWanted,
+  onUpdateWantedCount,
   getWantedCount,
 }: DeckPreviewProps) {
   const [sortedCardIds, setSortedCardIds] = useState<string[]>([]);
@@ -887,7 +887,7 @@ export default function DeckPreview({
       <ImageModal
         card={zoomedCard}
         onClose={() => setZoomedCard(null)}
-        onAddToWanted={onAddToWanted}
+        onUpdateWantedCount={onUpdateWantedCount}
         wantedCount={zoomedCard && getWantedCount ? getWantedCount(zoomedCard.card_id) : 0}
       />
     </div>

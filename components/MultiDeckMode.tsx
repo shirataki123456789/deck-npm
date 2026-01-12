@@ -120,7 +120,7 @@ export default function MultiDeckMode() {
   const [newTagInput, setNewTagInput] = useState('');
 
   // 必要カードリスト
-  const { addWantedCard, getWantedCount } = useWantedCards();
+  const { updateWantedCount, getWantedCount } = useWantedCards();
 
   // タブが変更されたらsessionStorageに保存
   useEffect(() => {
@@ -1075,7 +1075,7 @@ export default function MultiDeckMode() {
               hasNextDeck={activeTabIndex < tabs.length - 1}
               currentDeckIndex={activeTabIndex}
               totalDecks={tabs.length}
-              onAddToWanted={addWantedCard}
+              onUpdateWantedCount={updateWantedCount}
               getWantedCount={getWantedCount}
             />
           )}
@@ -1146,7 +1146,7 @@ export default function MultiDeckMode() {
                     showAddButton={true}
                     getCardCount={(cardId) => activeTab.deck.cards[cardId] || 0}
                     canAddCard={canAddCard}
-                    onAddToWanted={addWantedCard}
+                    onUpdateWantedCount={updateWantedCount}
                     getWantedCount={getWantedCount}
                   />
                 )}

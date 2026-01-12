@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Card } from '@/lib/types';
 import { drawBlankCardPlaceholder } from '@/lib/imageGenerator';
 
 interface ImageModalProps {
   card: Card | null;
   onClose: () => void;
-  onAddToWanted?: (card: Card, count: number) => void;
+  onUpdateWantedCount?: (card: Card, count: number) => void;
   wantedCount?: number;
 }
 
@@ -71,10 +71,7 @@ function BlankCardCanvasLarge({ card }: { card: Card }) {
   );
 }
 
-export default function ImageModal({ card, onClose, onAddToWanted, wantedCount = 0 }: ImageModalProps) {
-  const [addCount, setAddCount] = useState(1);
-  const [showAddedMessage, setShowAddedMessage] = useState(false);
-
+export default function ImageModal({ card, onClose, onUpdateWantedCount, wantedCount = 0 }: ImageModalProps) {
   // ESCキーで閉じる
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -93,14 +90,6 @@ export default function ImageModal({ card, onClose, onAddToWanted, wantedCount =
       document.body.style.overflow = '';
     };
   }, [card, onClose]);
-
-  const handleAddToWanted = () => {
-    if (card && onAddToWanted) {
-      onAddToWanted(card, addCount);
-      setShowAddedMessage(true);
-      setTimeout(() => setShowAddedMessage(false), 1500);
-    }
-  };
   
   if (!card) return null;
   
@@ -191,42 +180,40 @@ export default function ImageModal({ card, onClose, onAddToWanted, wantedCount =
               </div>
             )}
             
-            {/* 必要リストに追加ボタン */}
-            {onAddToWanted && (
+            {/* 必要リスト（即時反映） */}
+            {onUpdateWantedCount && (
               <div className="mt-3 p-2 bg-orange-50 rounded-lg">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-orange-700 flex-shrink-0">📋 必要リスト:</span>
-                  {wantedCount > 0 && (
-                    <span className="text-xs bg-orange-200 text-orange-800 px-2 py-0.5 rounded">
-                      登録済 {wantedCount}枚
-                    </span>
-                  )}
                   <div className="flex-1" />
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setAddCount(Math.max(1, addCount - 1))}
-                      className="w-7 h-7 bg-white border rounded text-sm hover:bg-gray-100"
+                      onClick={() => onUpdateWantedCount(card, Math.max(0, wantedCount - 1))}
+                      disabled={wantedCount <= 0}
+                      className={`w-8 h-8 rounded text-lg font-bold ${
+                        wantedCount > 0 
+                          ? 'bg-red-500 text-white hover:bg-red-600' 
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      }`}
                     >
                       -
                     </button>
-                    <span className="w-6 text-center text-sm font-medium">{addCount}</span>
+                    <span className={`w-10 text-center text-lg font-bold ${
+                      wantedCount > 0 ? 'text-orange-600' : 'text-gray-400'
+                    }`}>
+                      {wantedCount}
+                    </span>
                     <button
-                      onClick={() => setAddCount(addCount + 1)}
-                      className="w-7 h-7 bg-white border rounded text-sm hover:bg-gray-100"
+                      onClick={() => onUpdateWantedCount(card, wantedCount + 1)}
+                      className="w-8 h-8 bg-green-500 text-white rounded text-lg font-bold hover:bg-green-600"
                     >
                       +
                     </button>
                   </div>
-                  <button
-                    onClick={handleAddToWanted}
-                    className="px-3 py-1.5 bg-orange-500 text-white rounded text-sm hover:bg-orange-600 flex-shrink-0"
-                  >
-                    追加
-                  </button>
                 </div>
-                {showAddedMessage && (
-                  <div className="mt-1 text-xs text-green-600 text-center">
-                    ✓ {addCount}枚追加しました
+                {wantedCount > 0 && (
+                  <div className="mt-1 text-xs text-orange-600 text-center">
+                    ✓ {wantedCount}枚登録中
                   </div>
                 )}
               </div>
