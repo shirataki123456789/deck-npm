@@ -906,7 +906,7 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
           leaderCard: tab.leaderCard ?? undefined,
           cardUrls,
           cards: deckCards,
-          deckName: tab.name || 'デッキ',
+          deckName: tab.deck.name || tab.name || 'デッキ',
           qrDataUrl,
           leaderColors: tab.leaderCard!.color,
         });
@@ -914,7 +914,8 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
         // ファイル名: デッキ名_シリーズ名（リーダーIDから取得）
         const seriesMatch = tab.leaderCard!.card_id.match(/^([A-Z]+\d+)/);
         const seriesName = seriesMatch ? seriesMatch[1] : '';
-        const safeDeckName = (tab.name || 'デッキ').replace(/[\\/:*?"<>|]/g, '_');
+        const deckNameForFile = tab.deck.name || tab.name || 'デッキ';
+        const safeDeckName = deckNameForFile.replace(/[\\/:*?"<>|]/g, '_');
         const fileName = seriesName ? `${safeDeckName}_${seriesName}.png` : `${safeDeckName}.png`;
 
         const url = URL.createObjectURL(imageBlob);
