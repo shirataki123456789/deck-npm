@@ -8,6 +8,7 @@ import DeckSidebar from './DeckSidebar';
 import DeckPreview from './DeckPreview';
 import LeaderSelect from './LeaderSelect';
 import BlankCardModal from './BlankCardModal';
+import { useWantedCards } from './WantedCardsContext';
 
 type DeckView = 'leader' | 'preview' | 'add_cards';
 
@@ -50,6 +51,7 @@ export default function MultiDeckMode() {
   const [activeTabId, setActiveTabId] = useState(tabs[0].id);
   const [showGridView, setShowGridView] = useState(false);
   const [gridColorFilter, setGridColorFilter] = useState<string[]>([]);
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
 
   // 一括操作モーダル
   const [showBatchImport, setShowBatchImport] = useState(false);
@@ -72,8 +74,50 @@ export default function MultiDeckMode() {
   const [showBlankCardModal, setShowBlankCardModal] = useState(false);
   const [editingBlankCard, setEditingBlankCard] = useState<Card | null>(null);
 
+  // 必要カードリスト
+  const { addWantedCard, getWantedCount } = useWantedCards();
+
   // アクティブなタブ
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+  const activeTabIndex = tabs.findIndex(t => t.id === activeTabId);
+
+  // デッキナビゲーション
+  const goToPrevDeck = () => {
+    if (activeTabIndex > 0) {
+      setActiveTabId(tabs[activeTabIndex - 1].id);
+    }
+  };
+
+  const goToNextDeck = () => {
+    if (activeTabIndex < tabs.length - 1) {
+      setActiveTabId(tabs[activeTabIndex + 1].id);
+    }
+  };
+
+  // ドラッグ&ドロップ
+  const handleDragStart = (tabId: string) => {
+    setDraggedTabId(tabId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetTabId: string) => {
+    e.preventDefault();
+    if (!draggedTabId || draggedTabId === targetTabId) return;
+    
+    setTabs(prev => {
+      const draggedIndex = prev.findIndex(t => t.id === draggedTabId);
+      const targetIndex = prev.findIndex(t => t.id === targetTabId);
+      if (draggedIndex === -1 || targetIndex === -1) return prev;
+      
+      const newTabs = [...prev];
+      const [draggedTab] = newTabs.splice(draggedIndex, 1);
+      newTabs.splice(targetIndex, 0, draggedTab);
+      return newTabs;
+    });
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTabId(null);
+  };
 
   // 色フィルター定義
   const colorOptions = [
@@ -648,12 +692,17 @@ export default function MultiDeckMode() {
               return (
                 <div
                   key={tab.id}
+                  draggable
+                  onDragStart={() => handleDragStart(tab.id)}
+                  onDragOver={(e) => handleDragOver(e, tab.id)}
+                  onDragEnd={handleDragEnd}
                   onClick={() => setActiveTabId(tab.id)}
                   onDoubleClick={() => renameTab(tab.id)}
                   className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer select-none whitespace-nowrap text-xs ${
                     activeTabId === tab.id
                       ? 'bg-white border border-gray-300 font-medium shadow-sm'
                       : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
+                  } ${draggedTabId === tab.id ? 'opacity-50' : ''}`}
                   }`}
                 >
                   <span className="max-w-[100px] truncate">{tab.name}</span>
@@ -726,9 +775,13 @@ export default function MultiDeckMode() {
               return (
                 <div
                   key={tab.id}
+                  draggable
+                  onDragStart={() => handleDragStart(tab.id)}
+                  onDragOver={(e) => handleDragOver(e, tab.id)}
+                  onDragEnd={handleDragEnd}
                   className={`relative cursor-pointer rounded-lg border-2 overflow-hidden hover:shadow-lg transition-shadow ${
                     activeTabId === tab.id ? 'border-blue-500' : 'border-gray-200'
-                  }`}
+                  } ${draggedTabId === tab.id ? 'opacity-50' : ''}`}
                 >
                   {/* 並べ替えボタン */}
                   <div className="absolute top-1 left-1 right-1 flex justify-between z-10">
@@ -853,6 +906,14 @@ export default function MultiDeckMode() {
                 updateTab(activeTabId, { blankCards: activeTab.blankCards.map(c => c.card_id === card.card_id ? card : c), leaderCard: card });
                 setAllCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
               }}
+              onPrevDeck={goToPrevDeck}
+              onNextDeck={goToNextDeck}
+              hasPrevDeck={activeTabIndex > 0}
+              hasNextDeck={activeTabIndex < tabs.length - 1}
+              currentDeckIndex={activeTabIndex}
+              totalDecks={tabs.length}
+              onAddToWanted={addWantedCard}
+              getWantedCount={getWantedCount}
             />
           )}
 
@@ -922,6 +983,8 @@ export default function MultiDeckMode() {
                     showAddButton={true}
                     getCardCount={(cardId) => activeTab.deck.cards[cardId] || 0}
                     canAddCard={canAddCard}
+                    onAddToWanted={addWantedCard}
+                    getWantedCount={getWantedCount}
                   />
                 )}
               </div>

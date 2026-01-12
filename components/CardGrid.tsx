@@ -14,6 +14,9 @@ interface CardGridProps {
   showAddButton?: boolean;
   getCardCount?: (cardId: string) => number;
   canAddCard?: (cardId: string) => boolean;
+  // 必要リスト機能
+  onAddToWanted?: (card: Card, count: number) => void;
+  getWantedCount?: (cardId: string) => number;
 }
 
 export default function CardGrid({
@@ -25,6 +28,8 @@ export default function CardGrid({
   showAddButton = false,
   getCardCount,
   canAddCard,
+  onAddToWanted,
+  getWantedCount,
 }: CardGridProps) {
   const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
   
@@ -53,7 +58,12 @@ export default function CardGrid({
       </div>
       
       {/* 画像拡大モーダル */}
-      <ImageModal card={zoomedCard} onClose={() => setZoomedCard(null)} />
+      <ImageModal
+        card={zoomedCard}
+        onClose={() => setZoomedCard(null)}
+        onAddToWanted={onAddToWanted}
+        wantedCount={zoomedCard && getWantedCount ? getWantedCount(zoomedCard.card_id) : 0}
+      />
     </>
   );
 }

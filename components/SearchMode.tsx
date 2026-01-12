@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import FilterPanel from './FilterPanel';
 import CardGrid from './CardGrid';
 import { Card, FilterOptions, DEFAULT_FILTER_OPTIONS } from '@/lib/types';
+import { useWantedCards } from './WantedCardsContext';
 
 interface FilterMeta {
   colors: string[];
@@ -24,6 +25,9 @@ export default function SearchMode() {
   const [filterMeta, setFilterMeta] = useState<FilterMeta | null>(null);
   const [colsCount, setColsCount] = useState(4);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // 必要カードリスト
+  const { addWantedCard, getWantedCount } = useWantedCards();
   
   // フィルタメタデータを取得
   useEffect(() => {
@@ -163,7 +167,12 @@ export default function SearchMode() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
           </div>
         ) : (
-          <CardGrid cards={cards} colsCount={colsCount} />
+          <CardGrid
+            cards={cards}
+            colsCount={colsCount}
+            onAddToWanted={addWantedCard}
+            getWantedCount={getWantedCount}
+          />
         )}
       </div>
     </div>

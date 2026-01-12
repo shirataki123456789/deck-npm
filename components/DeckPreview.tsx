@@ -78,6 +78,16 @@ interface DeckPreviewProps {
   onRemoveCard: (cardId: string) => void;
   onAddCard: (card: Card) => void;
   onEditBlankLeader?: (card: Card) => void; // ブランクリーダー編集
+  // マルチデッキ用ナビゲーション
+  onPrevDeck?: () => void;
+  onNextDeck?: () => void;
+  hasPrevDeck?: boolean;
+  hasNextDeck?: boolean;
+  currentDeckIndex?: number;
+  totalDecks?: number;
+  // 必要リスト機能
+  onAddToWanted?: (card: Card, count: number) => void;
+  getWantedCount?: (cardId: string) => number;
 }
 
 interface DeckCardInfo {
@@ -102,6 +112,14 @@ export default function DeckPreview({
   onRemoveCard,
   onAddCard,
   onEditBlankLeader,
+  onPrevDeck,
+  onNextDeck,
+  hasPrevDeck,
+  hasNextDeck,
+  currentDeckIndex,
+  totalDecks,
+  onAddToWanted,
+  getWantedCount,
 }: DeckPreviewProps) {
   const [sortedCardIds, setSortedCardIds] = useState<string[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -352,7 +370,43 @@ export default function DeckPreview({
         </div>
       </div>
       
-      <h2 className="text-xl font-bold mb-4">🃏 デッキプレビュー</h2>
+      {/* ヘッダー: タイトルとナビゲーション */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold">🃏 デッキプレビュー</h2>
+        
+        {/* マルチデッキ用ナビゲーション */}
+        {(onPrevDeck || onNextDeck) && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onPrevDeck}
+              disabled={!hasPrevDeck}
+              className={`px-3 py-1 rounded text-sm ${
+                hasPrevDeck
+                  ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              ◀ 前
+            </button>
+            {currentDeckIndex !== undefined && totalDecks !== undefined && (
+              <span className="text-sm text-gray-600">
+                {currentDeckIndex + 1}/{totalDecks}
+              </span>
+            )}
+            <button
+              onClick={onNextDeck}
+              disabled={!hasNextDeck}
+              className={`px-3 py-1 rounded text-sm ${
+                hasNextDeck
+                  ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              次 ▶
+            </button>
+          </div>
+        )}
+      </div>
       
       {/* リーダー情報 */}
       <div className="bg-white rounded-lg shadow p-4 mb-4">
@@ -830,7 +884,12 @@ export default function DeckPreview({
       </div>
       
       {/* 画像拡大モーダル */}
-      <ImageModal card={zoomedCard} onClose={() => setZoomedCard(null)} />
+      <ImageModal
+        card={zoomedCard}
+        onClose={() => setZoomedCard(null)}
+        onAddToWanted={onAddToWanted}
+        wantedCount={zoomedCard && getWantedCount ? getWantedCount(zoomedCard.card_id) : 0}
+      />
     </div>
   );
 }
