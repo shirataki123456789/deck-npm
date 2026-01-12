@@ -48,6 +48,7 @@ export default function MultiDeckMode() {
   // タブ管理
   const [tabs, setTabs] = useState<DeckTab[]>([createNewTab('デッキ1')]);
   const [activeTabId, setActiveTabId] = useState(tabs[0].id);
+  const [showGridView, setShowGridView] = useState(false);
 
   // 一括操作モーダル
   const [showBatchImport, setShowBatchImport] = useState(false);
@@ -354,8 +355,19 @@ export default function MultiDeckMode() {
     setAllCards(prev => prev.filter(c => c.card_id !== cardId));
   };
 
+  // 未編集タブを削除するヘルパー
+  const removeEmptyTabs = () => {
+    setTabs(prev => {
+      const nonEmptyTabs = prev.filter(t => t.leaderCard !== null);
+      return nonEmptyTabs.length > 0 ? nonEmptyTabs : prev;
+    });
+  };
+
   // 一括インポート
   const handleBatchImport = async (deckTexts: { name: string; text: string }[]) => {
+    // インポート前に未編集タブを削除
+    removeEmptyTabs();
+    
     for (const { name: fileName, text } of deckTexts) {
       try {
         let cleanText = text;
@@ -435,6 +447,9 @@ export default function MultiDeckMode() {
 
   // JSONインポート
   const handleJSONImport = async (jsonData: any[]) => {
+    // インポート前に未編集タブを削除
+    removeEmptyTabs();
+    
     for (const item of jsonData) {
       try {
         // リーダーを検索
@@ -494,55 +509,130 @@ export default function MultiDeckMode() {
 
   return (
     <>
-      {/* タブバー */}
-      <div className="bg-gray-100 border-b px-2 py-1 flex items-center gap-1 overflow-x-auto sticky top-[52px] sm:top-[60px] z-40">
-        {tabs.map(tab => {
-          const tabTotal = Object.values(tab.deck.cards).reduce((sum, c) => sum + c, 0);
-          return (
-            <div
-              key={tab.id}
-              onClick={() => setActiveTabId(tab.id)}
-              onDoubleClick={() => renameTab(tab.id)}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-t cursor-pointer select-none min-w-[80px] max-w-[160px] text-sm ${
-                activeTabId === tab.id
-                  ? 'bg-white border-t border-l border-r border-gray-300 -mb-px font-medium'
-                  : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
-              }`}
-            >
-              <span className="truncate flex-1">{tab.name}</span>
-              {tab.leaderCard && (
-                <span className={`text-xs px-1 rounded ${
-                  tabTotal === 50 ? 'bg-green-500 text-white' :
-                  tabTotal > 50 ? 'bg-red-500 text-white' : 'bg-gray-400 text-white'
-                }`}>{tabTotal}</span>
-              )}
-              {tabs.length > 1 && (
-                <button onClick={(e) => removeTab(tab.id, e)} className="text-gray-400 hover:text-red-500">×</button>
-              )}
-            </div>
-          );
-        })}
-        <button onClick={addTab} className="px-2 py-1.5 text-gray-500 hover:bg-gray-200 rounded" title="新しいデッキ">＋</button>
-        <div className="ml-auto flex items-center gap-1">
-          <button onClick={() => setShowBatchImport(true)} className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">📥 一括読込</button>
-          <button onClick={() => setShowBatchExport(true)} className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600">📤 一括出力</button>
+      {/* ツールバー（携帯でも見やすいように2段構成） */}
+      <div className="bg-gray-100 border-b sticky top-[52px] sm:top-[60px] z-40">
+        {/* 上段: 操作ボタン */}
+        <div className="px-2 py-1 flex items-center gap-1 border-b border-gray-200">
+          <button
+            onClick={() => setShowGridView(!showGridView)}
+            className={`px-2 py-1 text-xs rounded ${showGridView ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+            title="グリッド一覧"
+          >
+            {showGridView ? '📋 タブ表示' : '🔲 一覧'}
+          </button>
+          <button onClick={addTab} className="px-2 py-1 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300 rounded" title="新しいデッキ">＋ 追加</button>
+          <div className="ml-auto flex items-center gap-1">
+            <button onClick={() => setShowBatchImport(true)} className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">📥 読込</button>
+            <button onClick={() => setShowBatchExport(true)} className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600">📤 出力</button>
+          </div>
         </div>
+        {/* 下段: タブ一覧（グリッドモード以外で表示） */}
+        {!showGridView && (
+          <div className="px-2 py-1 flex items-center gap-1 overflow-x-auto">
+            {tabs.map(tab => {
+              const tabTotal = Object.values(tab.deck.cards).reduce((sum, c) => sum + c, 0);
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => setActiveTabId(tab.id)}
+                  onDoubleClick={() => renameTab(tab.id)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer select-none whitespace-nowrap text-xs ${
+                    activeTabId === tab.id
+                      ? 'bg-white border border-gray-300 font-medium shadow-sm'
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
+                  }`}
+                >
+                  <span className="max-w-[100px] truncate">{tab.name}</span>
+                  {tab.leaderCard && (
+                    <span className={`px-1 rounded ${
+                      tabTotal === 50 ? 'bg-green-500 text-white' :
+                      tabTotal > 50 ? 'bg-red-500 text-white' : 'bg-gray-400 text-white'
+                    }`}>{tabTotal}</span>
+                  )}
+                  {tabs.length > 1 && (
+                    <button onClick={(e) => removeTab(tab.id, e)} className="text-gray-400 hover:text-red-500 ml-1">×</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <div className="flex min-h-screen">
-        {/* モバイル用サイドバーオーバーレイ */}
-        {sidebarOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
-        )}
-
-        {/* メインコンテンツ */}
-        <div className="flex-1 p-4">
-          {activeTab.view !== 'leader' && (
-            <div className="lg:hidden mb-4">
-              <button onClick={() => setSidebarOpen(true)} className="btn btn-secondary w-full">
-                🧾 デッキを表示 ({totalCards}/50)
-              </button>
+      {/* グリッド一覧モード */}
+      {showGridView ? (
+        <div className="p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {tabs.map(tab => {
+              const tabTotal = Object.values(tab.deck.cards).reduce((sum, c) => sum + c, 0);
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => { setActiveTabId(tab.id); setShowGridView(false); }}
+                  className={`relative cursor-pointer rounded-lg border-2 overflow-hidden hover:shadow-lg transition-shadow ${
+                    activeTabId === tab.id ? 'border-blue-500' : 'border-gray-200'
+                  }`}
+                >
+                  {/* リーダー画像または空の表示 */}
+                  <div className="aspect-[7/10] bg-gray-100 flex items-center justify-center">
+                    {tab.leaderCard?.image_url ? (
+                      <img src={tab.leaderCard.image_url} alt={tab.leaderCard.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="text-gray-400 text-center p-2">
+                        <div className="text-3xl mb-1">📝</div>
+                        <div className="text-xs">未選択</div>
+                      </div>
+                    )}
+                  </div>
+                  {/* デッキ情報 */}
+                  <div className="p-2 bg-white">
+                    <div className="text-xs font-medium truncate">{tab.name}</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                        tabTotal === 50 ? 'bg-green-500 text-white' :
+                        tabTotal > 50 ? 'bg-red-500 text-white' :
+                        tabTotal > 0 ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-600'
+                      }`}>
+                        {tabTotal}/50
+                      </span>
+                      {tabs.length > 1 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeTab(tab.id, e); }}
+                          className="text-xs text-gray-400 hover:text-red-500"
+                        >
+                          削除
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {/* 新規追加カード */}
+            <div
+              onClick={addTab}
+              className="cursor-pointer rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 flex flex-col items-center justify-center aspect-[7/10] bg-gray-50 hover:bg-gray-100 transition-colors"
+            >
+              <div className="text-3xl text-gray-400">＋</div>
+              <div className="text-xs text-gray-500 mt-1">新規追加</div>
             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex min-h-screen">
+          {/* モバイル用サイドバーオーバーレイ */}
+          {sidebarOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+          )}
+
+          {/* メインコンテンツ */}
+          <div className="flex-1 p-4">
+            {activeTab.view !== 'leader' && (
+              <div className="lg:hidden mb-4">
+                <button onClick={() => setSidebarOpen(true)} className="btn btn-secondary w-full">
+                  🧾 デッキを表示 ({totalCards}/50)
+                </button>
+              </div>
           )}
 
           {/* リーダー選択画面 */}
@@ -694,6 +784,7 @@ export default function MultiDeckMode() {
           availableAttributes={filterMeta?.attributes || []}
         />
       </div>
+      )}
 
       {/* 一括インポートモーダル */}
       {showBatchImport && (
