@@ -700,7 +700,6 @@ export default function MultiDeckMode() {
                       ? 'bg-white border border-gray-300 font-medium shadow-sm'
                       : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
                   } ${draggedTabId === tab.id ? 'opacity-50' : ''}`}
-                  }`}
                 >
                   <span className="max-w-[100px] truncate">{tab.name}</span>
                   {tab.leaderCard && (
