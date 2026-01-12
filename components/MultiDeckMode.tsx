@@ -633,9 +633,6 @@ export default function MultiDeckMode() {
 
   const totalCards = Object.values(activeTab.deck.cards).reduce((sum, c) => sum + c, 0);
 
-  // 選択中タブのインデックス
-  const activeTabIndex = tabs.findIndex(t => t.id === activeTabId);
-
   return (
     <>
       {/* ツールバー（携帯でも見やすいように2段構成） */}
