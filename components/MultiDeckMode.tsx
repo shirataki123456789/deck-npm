@@ -19,6 +19,7 @@ interface DeckTab {
   leaderCard: Card | null;
   view: DeckView;
   blankCards: Card[];
+  tags: string[];
 }
 
 interface FilterMeta {
@@ -33,6 +34,9 @@ interface FilterMeta {
   seriesIds: string[];
 }
 
+// sessionStorageキー
+const STORAGE_KEY = 'multiDeckTabs';
+
 let tabCounter = 0;
 const generateTabId = () => `tab-${Date.now()}-${++tabCounter}`;
 
@@ -43,14 +47,52 @@ const createNewTab = (name: string): DeckTab => ({
   leaderCard: null,
   view: 'leader',
   blankCards: [],
+  tags: [],
 });
 
+// sessionStorageからタブを復元
+const loadTabsFromStorage = (): DeckTab[] | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = sessionStorage.getItem(STORAGE_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // tagsフィールドがない古いデータの互換性
+      return parsed.map((tab: any) => ({
+        ...tab,
+        tags: tab.tags || [],
+      }));
+    }
+  } catch (e) {
+    console.error('Failed to load tabs from storage:', e);
+  }
+  return null;
+};
+
+// sessionStorageにタブを保存
+const saveTabsToStorage = (tabs: DeckTab[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(tabs));
+  } catch (e) {
+    console.error('Failed to save tabs to storage:', e);
+  }
+};
+
 export default function MultiDeckMode() {
-  // タブ管理
-  const [tabs, setTabs] = useState<DeckTab[]>([createNewTab('デッキ1')]);
-  const [activeTabId, setActiveTabId] = useState(tabs[0].id);
+  // タブ管理（sessionStorageから復元）
+  const [tabs, setTabs] = useState<DeckTab[]>(() => {
+    const stored = loadTabsFromStorage();
+    return stored || [createNewTab('デッキ1')];
+  });
+  const [activeTabId, setActiveTabId] = useState(() => {
+    const stored = loadTabsFromStorage();
+    return stored?.[0]?.id || tabs[0]?.id || '';
+  });
   const [showGridView, setShowGridView] = useState(false);
   const [gridColorFilter, setGridColorFilter] = useState<string[]>([]);
+  const [gridTagFilter, setGridTagFilter] = useState<string[]>([]);
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const [gridColsCount, setGridColsCount] = useState(5);
 
@@ -74,13 +116,23 @@ export default function MultiDeckMode() {
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
   const [showBlankCardModal, setShowBlankCardModal] = useState(false);
   const [editingBlankCard, setEditingBlankCard] = useState<Card | null>(null);
+  const [editingTagsTabId, setEditingTagsTabId] = useState<string | null>(null);
+  const [newTagInput, setNewTagInput] = useState('');
 
   // 必要カードリスト
   const { addWantedCard, getWantedCount } = useWantedCards();
 
+  // タブが変更されたらsessionStorageに保存
+  useEffect(() => {
+    saveTabsToStorage(tabs);
+  }, [tabs]);
+
   // アクティブなタブ
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   const activeTabIndex = tabs.findIndex(t => t.id === activeTabId);
+
+  // 全タグを収集
+  const allTags = Array.from(new Set(tabs.flatMap(t => t.tags))).sort();
 
   // デッキナビゲーション
   const goToPrevDeck = () => {
@@ -130,13 +182,19 @@ export default function MultiDeckMode() {
     { value: '黄', label: '黄', bgClass: 'bg-yellow-400' },
   ];
 
-  // グリッドビュー用のフィルター済みタブ
-  const filteredTabs = gridColorFilter.length === 0
-    ? tabs
-    : tabs.filter(tab => {
-        if (!tab.leaderCard) return false;
-        return tab.leaderCard.color.some(c => gridColorFilter.includes(c));
-      });
+  // グリッドビュー用のフィルター済みタブ（色とタグ）
+  const filteredTabs = tabs.filter(tab => {
+    // 色フィルター
+    if (gridColorFilter.length > 0) {
+      if (!tab.leaderCard) return false;
+      if (!tab.leaderCard.color.some(c => gridColorFilter.includes(c))) return false;
+    }
+    // タグフィルター
+    if (gridTagFilter.length > 0) {
+      if (!tab.tags.some(t => gridTagFilter.includes(t))) return false;
+    }
+    return true;
+  });
 
   // タブの並べ替え
   const moveTab = (tabId: string, direction: 'left' | 'right') => {
@@ -548,6 +606,7 @@ export default function MultiDeckMode() {
             leaderCard,
             view: leaderCard ? 'preview' : 'leader',
             blankCards: blankLeaderFromQR ? [blankLeaderFromQR] : [],
+            tags: [],
           };
           newTabs.push(newTab);
         }
@@ -617,6 +676,7 @@ export default function MultiDeckMode() {
           leaderCard,
           view: leaderCard ? 'preview' : 'leader',
           blankCards: [],
+          tags: Array.isArray(item.tags) ? item.tags : [],
         };
         newTabs.push(newTab);
       } catch (error) {
@@ -632,7 +692,7 @@ export default function MultiDeckMode() {
     }
   };
 
-  const totalCards = Object.values(activeTab.deck.cards).reduce((sum, c) => sum + c, 0);
+  const totalCards = Object.values(activeTab.deck.cards).reduce((sum: number, c: number) => sum + c, 0);
 
   return (
     <>
@@ -677,6 +737,19 @@ export default function MultiDeckMode() {
               </button>
             </div>
           )}
+          {/* タグ編集ボタン（タブモード時） */}
+          {!showGridView && (
+            <button
+              onClick={() => setEditingTagsTabId(activeTabId)}
+              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 flex items-center gap-1"
+              title="タグ編集"
+            >
+              🏷️
+              {activeTab.tags.length > 0 && (
+                <span className="bg-blue-500 text-white px-1 rounded text-[10px]">{activeTab.tags.length}</span>
+              )}
+            </button>
+          )}
           <div className="ml-auto flex items-center gap-1">
             <button onClick={() => setShowBatchImport(true)} className="px-2 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">📥 読込</button>
             <button onClick={() => setShowBatchExport(true)} className="px-2 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600">📤 出力</button>
@@ -686,7 +759,7 @@ export default function MultiDeckMode() {
         {!showGridView && (
           <div className="px-2 py-1.5 flex items-center gap-1 overflow-x-auto">
             {tabs.map(tab => {
-              const tabTotal = Object.values(tab.deck.cards).reduce((sum, c) => sum + c, 0);
+              const tabTotal = Object.values(tab.deck.cards).reduce((sum: number, c: number) => sum + c, 0);
               return (
                 <div
                   key={tab.id}
@@ -751,7 +824,44 @@ export default function MultiDeckMode() {
                 クリア
               </button>
             )}
-            <div className="ml-auto flex items-center gap-2">
+          </div>
+          
+          {/* タグフィルター */}
+          {allTags.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-600">🏷️ タグ:</span>
+              {allTags.map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    setGridTagFilter(prev =>
+                      prev.includes(tag)
+                        ? prev.filter(t => t !== tag)
+                        : [...prev, tag]
+                    );
+                  }}
+                  className={`px-2 py-0.5 text-xs rounded-full border ${
+                    gridTagFilter.includes(tag)
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+              {gridTagFilter.length > 0 && (
+                <button
+                  onClick={() => setGridTagFilter([])}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  クリア
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="mb-2 flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <select
                 value={gridColsCount}
                 onChange={(e) => setGridColsCount(Number(e.target.value))}
@@ -768,10 +878,10 @@ export default function MultiDeckMode() {
               >
                 🔄 整頓
               </button>
-              <span className="text-xs text-gray-500">
-                {filteredTabs.length}/{tabs.length}件
-              </span>
             </div>
+            <span className="text-xs text-gray-500 ml-auto">
+              {filteredTabs.length}/{tabs.length}件
+            </span>
           </div>
 
           <div 
@@ -779,7 +889,7 @@ export default function MultiDeckMode() {
             style={{ gridTemplateColumns: `repeat(${gridColsCount}, minmax(0, 1fr))` }}
           >
             {filteredTabs.map((tab, index) => {
-              const tabTotal = Object.values(tab.deck.cards).reduce((sum, c) => sum + c, 0);
+              const tabTotal = Object.values(tab.deck.cards).reduce((sum: number, c: number) => sum + c, 0);
               const originalIndex = tabs.findIndex(t => t.id === tab.id);
               return (
                 <div
@@ -831,6 +941,19 @@ export default function MultiDeckMode() {
                   {/* デッキ情報 */}
                   <div className="p-2 bg-white">
                     <div className="text-xs font-medium truncate">{tab.name}</div>
+                    {/* タグ表示 */}
+                    {tab.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-0.5 mt-1">
+                        {tab.tags.slice(0, 3).map(tag => (
+                          <span key={tag} className="px-1 py-0.5 text-[10px] bg-blue-100 text-blue-700 rounded">
+                            {tag}
+                          </span>
+                        ))}
+                        {tab.tags.length > 3 && (
+                          <span className="text-[10px] text-gray-500">+{tab.tags.length - 3}</span>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mt-1">
                       <span className={`text-xs px-1.5 py-0.5 rounded ${
                         tabTotal === 50 ? 'bg-green-500 text-white' :
@@ -839,14 +962,23 @@ export default function MultiDeckMode() {
                       }`}>
                         {tabTotal}/50
                       </span>
-                      {tabs.length > 1 && (
+                      <div className="flex items-center gap-1">
                         <button
-                          onClick={(e) => { e.stopPropagation(); removeTab(tab.id, e); }}
-                          className="text-xs text-gray-400 hover:text-red-500"
+                          onClick={(e) => { e.stopPropagation(); setEditingTagsTabId(tab.id); }}
+                          className="text-xs text-gray-400 hover:text-blue-500"
+                          title="タグ編集"
                         >
-                          削除
+                          🏷️
                         </button>
-                      )}
+                        {tabs.length > 1 && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); removeTab(tab.id, e); }}
+                            className="text-xs text-gray-400 hover:text-red-500"
+                          >
+                            削除
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -872,11 +1004,33 @@ export default function MultiDeckMode() {
           {/* メインコンテンツ */}
           <div className="flex-1 p-4">
             {activeTab.view !== 'leader' && (
-              <div className="lg:hidden mb-4">
-                <button onClick={() => setSidebarOpen(true)} className="btn btn-secondary w-full">
-                  🧾 デッキを表示 ({totalCards}/50)
-                </button>
-              </div>
+              <>
+                <div className="lg:hidden mb-4">
+                  <button onClick={() => setSidebarOpen(true)} className="btn btn-secondary w-full">
+                    🧾 デッキを表示 ({totalCards}/50)
+                  </button>
+                </div>
+                
+                {/* タグ表示・編集エリア */}
+                <div className="mb-4 flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-gray-600">🏷️ タグ:</span>
+                  {activeTab.tags.length === 0 ? (
+                    <span className="text-sm text-gray-400">なし</span>
+                  ) : (
+                    activeTab.tags.map(tag => (
+                      <span key={tag} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                        {tag}
+                      </span>
+                    ))
+                  )}
+                  <button
+                    onClick={() => setEditingTagsTabId(activeTabId)}
+                    className="text-xs text-blue-500 hover:text-blue-700"
+                  >
+                    編集
+                  </button>
+                </div>
+              </>
           )}
 
           {/* リーダー選択画面 */}
@@ -1057,6 +1211,113 @@ export default function MultiDeckMode() {
           onClose={() => setShowBatchExport(false)}
         />
       )}
+
+      {/* タグ編集モーダル */}
+      {editingTagsTabId && (() => {
+        const editingTab = tabs.find(t => t.id === editingTagsTabId);
+        if (!editingTab) return null;
+        
+        const addTag = (tag: string) => {
+          const trimmedTag = tag.trim();
+          if (!trimmedTag || editingTab.tags.includes(trimmedTag)) return;
+          setTabs(prev => prev.map(t => 
+            t.id === editingTagsTabId 
+              ? { ...t, tags: [...t.tags, trimmedTag] }
+              : t
+          ));
+          setNewTagInput('');
+        };
+        
+        const removeTag = (tag: string) => {
+          setTabs(prev => prev.map(t => 
+            t.id === editingTagsTabId 
+              ? { ...t, tags: t.tags.filter(tg => tg !== tag) }
+              : t
+          ));
+        };
+        
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-[90] flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="p-4 border-b flex items-center justify-between">
+                <h3 className="font-bold">🏷️ タグ編集: {editingTab.name}</h3>
+                <button onClick={() => setEditingTagsTabId(null)} className="text-xl text-gray-500 hover:text-gray-700">×</button>
+              </div>
+              <div className="p-4">
+                {/* 既存タグ */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">現在のタグ</label>
+                  {editingTab.tags.length === 0 ? (
+                    <p className="text-sm text-gray-500">タグがありません</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {editingTab.tags.map(tag => (
+                        <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
+                          {tag}
+                          <button onClick={() => removeTag(tag)} className="text-blue-500 hover:text-red-500">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* 新規タグ追加 */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">タグを追加</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTagInput}
+                      onChange={(e) => setNewTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addTag(newTagInput);
+                        }
+                      }}
+                      placeholder="タグ名を入力"
+                      className="flex-1 border rounded px-3 py-2 text-sm"
+                    />
+                    <button
+                      onClick={() => addTag(newTagInput)}
+                      disabled={!newTagInput.trim()}
+                      className="px-4 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      追加
+                    </button>
+                  </div>
+                </div>
+                
+                {/* 既存タグから選択 */}
+                {allTags.filter(t => !editingTab.tags.includes(t)).length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">既存タグから選択</label>
+                    <div className="flex flex-wrap gap-2">
+                      {allTags.filter(t => !editingTab.tags.includes(t)).map(tag => (
+                        <button
+                          key={tag}
+                          onClick={() => addTag(tag)}
+                          className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200"
+                        >
+                          + {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="p-4 border-t">
+                <button
+                  onClick={() => setEditingTagsTabId(null)}
+                  className="w-full py-2 bg-gray-800 text-white rounded hover:bg-gray-900"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }
@@ -1219,15 +1480,22 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
   const [progress, setProgress] = useState(0);
 
   const exportJSON = () => {
-    const data = tabs.filter(t => t.leaderCard).map(tab => ({
-      name: tab.deck.name || tab.name || 'デッキ',
-      leader: { card_id: tab.leaderCard!.card_id, name: tab.leaderCard!.name, color: tab.leaderCard!.color },
-      cards: Object.entries(tab.deck.cards).map(([cardId, count]) => {
-        const card = [...allCards, ...tab.blankCards].find(c => c.card_id === cardId);
-        return { card_id: cardId, name: card?.name || cardId, count };
-      }),
-      total: Object.values(tab.deck.cards).reduce((sum, c) => sum + c, 0),
-    }));
+    const data = tabs.filter(t => t.leaderCard).map(tab => {
+      const base: any = {
+        name: tab.deck.name || tab.name || 'デッキ',
+        leader: { card_id: tab.leaderCard!.card_id, name: tab.leaderCard!.name, color: tab.leaderCard!.color },
+        cards: Object.entries(tab.deck.cards).map(([cardId, count]) => {
+          const card = [...allCards, ...tab.blankCards].find(c => c.card_id === cardId);
+          return { card_id: cardId, name: card?.name || cardId, count };
+        }),
+        total: Object.values(tab.deck.cards).reduce((sum: number, c: number) => sum + c, 0),
+      };
+      // タグがある場合のみ追加
+      if (tab.tags.length > 0) {
+        base.tags = tab.tags;
+      }
+      return base;
+    });
     downloadFile(JSON.stringify(data, null, 2), `decks_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
   };
 
