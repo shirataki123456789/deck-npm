@@ -213,11 +213,23 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
   const downloadJSON = () => {
     const data = wantedCards.map(w => ({
       card_id: w.card.card_id,
+      card_code: w.card.card_code,
       name: w.card.name,
       color: w.card.color,
       type: w.card.type,
       cost: w.card.cost,
+      power: w.card.power,
+      counter: w.card.counter,
+      attribute: w.card.attribute,
+      rarity: w.card.rarity,
+      features: w.card.features,
+      text: w.card.text,
+      trigger: w.card.trigger,
+      block_icon: w.card.block_icon,
+      source: w.card.source,
+      series_id: w.card.series_id,
       image_url: w.card.image_url,
+      is_parallel: w.card.is_parallel,
       count: w.count,
       owned: w.owned,
     }));
@@ -242,8 +254,9 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         if (Array.isArray(data)) {
           const imported: WantedCard[] = data.map(item => ({
             card: {
-              card_id: item.card_id,
-              name: item.name || item.card_id,
+              card_id: item.card_id || '',
+              card_code: item.card_code || '',
+              name: item.name || item.card_id || '',
               color: item.color || [],
               type: item.type || 'CHARACTER',
               cost: item.cost ?? 0,
@@ -253,12 +266,13 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
               attribute: item.attribute || '',
               text: item.text || '',
               trigger: item.trigger || '',
-              feature: item.feature || '',
+              features: item.features || [],
               series_id: item.series_id || '',
               rarity: item.rarity || '',
-              block: item.block || '',
-              life: item.life ?? 0,
-            } as Card,
+              block_icon: item.block_icon || '',
+              source: item.source || '',
+              is_parallel: item.is_parallel || false,
+            },
             count: item.count || 0,
             owned: item.owned || 0,
           }));
