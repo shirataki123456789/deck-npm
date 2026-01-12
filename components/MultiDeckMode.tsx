@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, Deck, FilterOptions, DEFAULT_FILTER_OPTIONS, UNLIMITED_CARDS } from '@/lib/types';
+import { Card, Deck, FilterOptions, DEFAULT_FILTER_OPTIONS, UNLIMITED_CARDS, COLOR_PRIORITY } from '@/lib/types';
 import FilterPanel from './FilterPanel';
 import CardGrid from './CardGrid';
 import DeckSidebar from './DeckSidebar';
@@ -105,6 +105,46 @@ export default function MultiDeckMode() {
       const newTabs = [...prev];
       [newTabs[index], newTabs[newIndex]] = [newTabs[newIndex], newTabs[index]];
       return newTabs;
+    });
+  };
+
+  // タブを整頓（カード検索と同じルールでソート）
+  const sortTabs = () => {
+    setTabs(prev => {
+      return [...prev].sort((a, b) => {
+        // リーダーがないタブは後ろ
+        if (!a.leaderCard && !b.leaderCard) return 0;
+        if (!a.leaderCard) return 1;
+        if (!b.leaderCard) return -1;
+
+        // 1) 色の優先度（最初の色で比較）
+        const getColorPriority = (card: Card) => {
+          if (card.color.length === 0) return 999;
+          for (const color of card.color) {
+            if (color in COLOR_PRIORITY) return COLOR_PRIORITY[color];
+          }
+          return 999;
+        };
+
+        const colorA = getColorPriority(a.leaderCard);
+        const colorB = getColorPriority(b.leaderCard);
+        if (colorA !== colorB) return colorA - colorB;
+
+        // 2) 複数色は単色の後
+        if (a.leaderCard.color.length !== b.leaderCard.color.length) {
+          return a.leaderCard.color.length - b.leaderCard.color.length;
+        }
+
+        // 3) 2色目の優先度（複数色の場合）
+        if (a.leaderCard.color.length > 1 && b.leaderCard.color.length > 1) {
+          const subColorA = a.leaderCard.color.length > 1 ? (COLOR_PRIORITY[a.leaderCard.color[1]] ?? 999) : 999;
+          const subColorB = b.leaderCard.color.length > 1 ? (COLOR_PRIORITY[b.leaderCard.color[1]] ?? 999) : 999;
+          if (subColorA !== subColorB) return subColorA - subColorB;
+        }
+
+        // 4) カードID
+        return a.leaderCard.card_id.localeCompare(b.leaderCard.card_id);
+      });
     });
   };
 
@@ -660,14 +700,23 @@ export default function MultiDeckMode() {
             {gridColorFilter.length > 0 && (
               <button
                 onClick={() => setGridColorFilter([])}
-                className="text-xs text-gray-500 hover:text-gray-700 ml-2"
+                className="text-xs text-gray-500 hover:text-gray-700"
               >
                 クリア
               </button>
             )}
-            <span className="text-xs text-gray-500 ml-auto">
-              {filteredTabs.length}/{tabs.length}件
-            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={sortTabs}
+                className="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600"
+                title="色順に整頓"
+              >
+                🔄 整頓
+              </button>
+              <span className="text-xs text-gray-500">
+                {filteredTabs.length}/{tabs.length}件
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
