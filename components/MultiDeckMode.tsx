@@ -355,18 +355,11 @@ export default function MultiDeckMode() {
     setAllCards(prev => prev.filter(c => c.card_id !== cardId));
   };
 
-  // 未編集タブを削除するヘルパー
-  const removeEmptyTabs = () => {
-    setTabs(prev => {
-      const nonEmptyTabs = prev.filter(t => t.leaderCard !== null);
-      return nonEmptyTabs.length > 0 ? nonEmptyTabs : prev;
-    });
-  };
-
   // 一括インポート
   const handleBatchImport = async (deckTexts: { name: string; text: string }[]) => {
-    // インポート前に未編集タブを削除
-    removeEmptyTabs();
+    // インポート前に未編集タブをフィルタ（リーダー未選択のタブを除外）
+    const existingValidTabs = tabs.filter(t => t.leaderCard !== null);
+    const newTabs: DeckTab[] = [];
     
     for (const { name: fileName, text } of deckTexts) {
       try {
@@ -437,18 +430,26 @@ export default function MultiDeckMode() {
             view: leaderCard ? 'preview' : 'leader',
             blankCards: blankLeaderFromQR ? [blankLeaderFromQR] : [],
           };
-          setTabs(prev => [...prev, newTab]);
+          newTabs.push(newTab);
         }
       } catch (error) {
         console.error(`Import error for ${fileName}:`, error);
       }
     }
+    
+    // 既存の有効なタブ + 新しいタブをセット
+    if (newTabs.length > 0) {
+      const allTabs = [...existingValidTabs, ...newTabs];
+      setTabs(allTabs);
+      setActiveTabId(newTabs[0].id);
+    }
   };
 
   // JSONインポート
   const handleJSONImport = async (jsonData: any[]) => {
-    // インポート前に未編集タブを削除
-    removeEmptyTabs();
+    // インポート前に未編集タブをフィルタ（リーダー未選択のタブを除外）
+    const existingValidTabs = tabs.filter(t => t.leaderCard !== null);
+    const newTabs: DeckTab[] = [];
     
     for (const item of jsonData) {
       try {
@@ -473,7 +474,7 @@ export default function MultiDeckMode() {
           tabName = `${leaderCard.color.join('')}${leaderCard.name}`;
         }
         if (!tabName) {
-          tabName = `デッキ${tabs.length + 1}`;
+          tabName = `デッキ${existingValidTabs.length + newTabs.length + 1}`;
         }
 
         // カード枚数を構築
@@ -498,10 +499,17 @@ export default function MultiDeckMode() {
           view: leaderCard ? 'preview' : 'leader',
           blankCards: [],
         };
-        setTabs(prev => [...prev, newTab]);
+        newTabs.push(newTab);
       } catch (error) {
         console.error(`JSON import error:`, error);
       }
+    }
+    
+    // 既存の有効なタブ + 新しいタブをセット
+    if (newTabs.length > 0) {
+      const allTabs = [...existingValidTabs, ...newTabs];
+      setTabs(allTabs);
+      setActiveTabId(newTabs[0].id);
     }
   };
 
@@ -510,25 +518,25 @@ export default function MultiDeckMode() {
   return (
     <>
       {/* ツールバー（携帯でも見やすいように2段構成） */}
-      <div className="bg-gray-100 border-b sticky top-[52px] sm:top-[60px] z-40">
+      <div className="bg-gray-100 border-b">
         {/* 上段: 操作ボタン */}
-        <div className="px-2 py-1 flex items-center gap-1 border-b border-gray-200">
+        <div className="px-2 py-1.5 flex items-center gap-1 border-b border-gray-200">
           <button
             onClick={() => setShowGridView(!showGridView)}
-            className={`px-2 py-1 text-xs rounded ${showGridView ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+            className={`px-2 py-1.5 text-xs rounded ${showGridView ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
             title="グリッド一覧"
           >
             {showGridView ? '📋 タブ表示' : '🔲 一覧'}
           </button>
-          <button onClick={addTab} className="px-2 py-1 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300 rounded" title="新しいデッキ">＋ 追加</button>
+          <button onClick={addTab} className="px-2 py-1.5 text-xs bg-gray-200 text-gray-700 hover:bg-gray-300 rounded" title="新しいデッキ">＋ 追加</button>
           <div className="ml-auto flex items-center gap-1">
-            <button onClick={() => setShowBatchImport(true)} className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">📥 読込</button>
-            <button onClick={() => setShowBatchExport(true)} className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600">📤 出力</button>
+            <button onClick={() => setShowBatchImport(true)} className="px-2 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">📥 読込</button>
+            <button onClick={() => setShowBatchExport(true)} className="px-2 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600">📤 出力</button>
           </div>
         </div>
         {/* 下段: タブ一覧（グリッドモード以外で表示） */}
         {!showGridView && (
-          <div className="px-2 py-1 flex items-center gap-1 overflow-x-auto">
+          <div className="px-2 py-1.5 flex items-center gap-1 overflow-x-auto">
             {tabs.map(tab => {
               const tabTotal = Object.values(tab.deck.cards).reduce((sum, c) => sum + c, 0);
               return (
@@ -619,7 +627,7 @@ export default function MultiDeckMode() {
           </div>
         </div>
       ) : (
-        <div className="flex min-h-screen">
+        <div className="flex">
           {/* モバイル用サイドバーオーバーレイ */}
           {sidebarOpen && (
             <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
