@@ -575,7 +575,7 @@ export default function MultiDeckMode() {
         {activeTab.view !== 'leader' && (
           <DeckSidebar
             deck={activeTab.deck}
-            setDeck={(newDeck) => updateTab(activeTabId, { deck: typeof newDeck === 'function' ? newDeck(activeTab.deck) : newDeck })}
+            setDeck={(newDeck) => updateTab(activeTabId, { deck: newDeck })}
             leaderCard={activeTab.leaderCard}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
