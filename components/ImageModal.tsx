@@ -104,7 +104,6 @@ export default function ImageModal({
   
   // 画像URLがない場合はブランクカード風に表示
   const isBlankCard = !card.image_url;
-  const missing = Math.max(0, wantedCount - ownedCount);
   
   return (
     <div 
@@ -192,13 +191,7 @@ export default function ImageModal({
             
             {/* 必要リスト（即時反映） */}
             {onUpdateWantedCount && (
-              <div className={`mt-3 p-3 rounded-lg border-2 ${
-                wantedCount > 0 && missing > 0 
-                  ? 'bg-red-50 border-red-300' 
-                  : wantedCount > 0 && missing === 0
-                    ? 'bg-green-50 border-green-300'
-                    : 'bg-orange-50 border-orange-200'
-              }`}>
+              <div className="mt-3 p-3 rounded-lg border-2 bg-orange-50 border-orange-200">
                 <div className="text-sm font-medium text-gray-700 mb-2">📋 必要カードリスト</div>
                 
                 {/* 必要数 */}
@@ -254,15 +247,6 @@ export default function ImageModal({
                     >
                       +
                     </button>
-                  </div>
-                )}
-                
-                {/* ステータス表示 */}
-                {wantedCount > 0 && (
-                  <div className={`mt-2 text-sm text-center font-medium ${
-                    missing > 0 ? 'text-red-600' : 'text-green-600'
-                  }`}>
-                    {missing > 0 ? `❗ 不足: ${missing}枚` : '✓ 揃っています'}
                   </div>
                 )}
               </div>

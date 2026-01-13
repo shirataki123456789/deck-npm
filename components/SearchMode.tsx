@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import FilterPanel from './FilterPanel';
 import CardGrid from './CardGrid';
 import { Card, FilterOptions, DEFAULT_FILTER_OPTIONS } from '@/lib/types';
@@ -25,9 +25,10 @@ export default function SearchMode() {
   const [filterMeta, setFilterMeta] = useState<FilterMeta | null>(null);
   const [colsCount, setColsCount] = useState(4);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [wantedOnly, setWantedOnly] = useState(false);
   
   // 必要カードリスト
-  const { updateWantedCount, updateOwnedCount, getWantedCount, getOwnedCount } = useWantedCards();
+  const { updateWantedCount, updateOwnedCount, getWantedCount, getOwnedCount, getWantedCardIds } = useWantedCards();
   
   // フィルタメタデータを取得
   useEffect(() => {
@@ -75,6 +76,13 @@ export default function SearchMode() {
     }, 300);
     return () => clearTimeout(timer);
   }, [filter, searchCards]);
+
+  // 必要リストフィルター適用
+  const filteredCards = useMemo(() => {
+    if (!wantedOnly) return cards;
+    const wantedIds = getWantedCardIds();
+    return cards.filter(c => wantedIds.includes(c.card_id));
+  }, [cards, wantedOnly, getWantedCardIds]);
   
   return (
     <div className="flex">
@@ -116,6 +124,21 @@ export default function SearchMode() {
             />
           )}
           
+          {/* 必要リストフィルター */}
+          <div className="mt-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={wantedOnly}
+                onChange={(e) => setWantedOnly(e.target.checked)}
+                className="w-4 h-4 rounded text-orange-500"
+              />
+              <span className="text-sm font-medium text-orange-700">
+                📋 必要リストのカードのみ表示
+              </span>
+            </label>
+          </div>
+          
           {/* 表示設定 */}
           <div className="mt-4 p-3 bg-gray-50 rounded-lg">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -156,9 +179,10 @@ export default function SearchMode() {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">
             🔍 カード検索
+            {wantedOnly && <span className="ml-2 text-sm text-orange-600">（必要リストのみ）</span>}
           </h2>
           <span className="text-gray-600">
-            該当カード数: {cards.length} 枚
+            該当カード数: {filteredCards.length} 枚
           </span>
         </div>
         
@@ -168,7 +192,7 @@ export default function SearchMode() {
           </div>
         ) : (
           <CardGrid
-            cards={cards}
+            cards={filteredCards}
             colsCount={colsCount}
             onUpdateWantedCount={updateWantedCount}
             onUpdateOwnedCount={updateOwnedCount}

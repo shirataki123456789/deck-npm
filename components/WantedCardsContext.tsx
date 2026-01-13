@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect } from 'react';
 import { Card } from '@/lib/types';
 
 interface WantedCard {
@@ -20,8 +20,9 @@ interface WantedCardsContextType {
   getOwnedCount: (cardId: string) => number;
   totalWantedCount: number;
   totalOwnedCount: number;
-  importWantedCards: (data: WantedCard[]) => void;
-  exportWantedCards: () => WantedCard[];
+  getWantedCardIds: () => string[];
+  importFromText: (text: string, allCards: Card[]) => number;
+  exportToText: () => string;
 }
 
 const WantedCardsContext = createContext<WantedCardsContextType | null>(null);
@@ -51,7 +52,6 @@ export function WantedCardsProvider({ children }: { children: ReactNode }) {
     setWantedCards(prev => {
       const existing = prev.find(w => w.card.card_id === card.card_id);
       if (count <= 0 && (!existing || existing.owned <= 0)) {
-        // 必要数0かつ所持数も0なら削除
         return prev.filter(w => w.card.card_id !== card.card_id);
       }
       if (existing) {
@@ -69,7 +69,6 @@ export function WantedCardsProvider({ children }: { children: ReactNode }) {
     setWantedCards(prev => {
       const existing = prev.find(w => w.card.card_id === card.card_id);
       if (owned <= 0 && (!existing || existing.count <= 0)) {
-        // 所持数0かつ必要数も0なら削除
         return prev.filter(w => w.card.card_id !== card.card_id);
       }
       if (existing) {
@@ -95,12 +94,45 @@ export function WantedCardsProvider({ children }: { children: ReactNode }) {
     return wantedCards.find(w => w.card.card_id === cardId)?.owned || 0;
   }, [wantedCards]);
 
-  const importWantedCards = useCallback((data: WantedCard[]) => {
-    setWantedCards(data);
+  const getWantedCardIds = useCallback(() => {
+    return wantedCards.map(w => w.card.card_id);
+  }, [wantedCards]);
+
+  // テキストからインポート（デッキと同形式: card_id:count または card_id:count:owned）
+  const importFromText = useCallback((text: string, allCards: Card[]): number => {
+    const lines = text.trim().split('\n');
+    let importedCount = 0;
+    
+    const newCards: WantedCard[] = [];
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      
+      const parts = trimmed.split(/[:\t]/);
+      const cardId = parts[0]?.trim();
+      const count = parseInt(parts[1]) || 1;
+      const owned = parseInt(parts[2]) || 0;
+      
+      if (cardId) {
+        const card = allCards.find(c => c.card_id === cardId);
+        if (card) {
+          newCards.push({ card, count, owned });
+          importedCount++;
+        }
+      }
+    }
+    
+    if (newCards.length > 0) {
+      setWantedCards(newCards);
+    }
+    
+    return importedCount;
   }, []);
 
-  const exportWantedCards = useCallback(() => {
-    return wantedCards;
+  // テキストにエクスポート
+  const exportToText = useCallback(() => {
+    return wantedCards.map(w => `${w.card.card_id}:${w.count}:${w.owned}`).join('\n');
   }, [wantedCards]);
 
   const totalWantedCount = wantedCards.reduce((sum, w) => sum + w.count, 0);
@@ -118,8 +150,9 @@ export function WantedCardsProvider({ children }: { children: ReactNode }) {
       getOwnedCount,
       totalWantedCount,
       totalOwnedCount,
-      importWantedCards,
-      exportWantedCards,
+      getWantedCardIds,
+      importFromText,
+      exportToText,
     }}>
       {children}
     </WantedCardsContext.Provider>
@@ -144,8 +177,6 @@ const COLOR_RGB: Record<string, string> = {
   '黄': '#eab308',
 };
 
-type FilterType = 'all' | 'missing' | 'complete';
-
 // 必要リストパネルコンポーネント
 export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
   const { 
@@ -156,33 +187,36 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
     clearWantedCards, 
     totalWantedCount,
     totalOwnedCount,
-    importWantedCards,
+    exportToText,
+    importFromText,
   } = useWantedCards();
   
   const [generating, setGenerating] = useState(false);
-  const [filter, setFilter] = useState<FilterType>('all');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrMode, setQrMode] = useState<'export' | 'import'>('export');
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [allCards, setAllCards] = useState<Card[]>([]);
 
-  // フィルター適用
-  const filteredCards = wantedCards.filter(w => {
-    if (filter === 'all') return true;
-    if (filter === 'missing') return w.count > w.owned; // 不足
-    if (filter === 'complete') return w.owned >= w.count && w.count > 0; // 揃った
-    return true;
-  });
+  // カードデータ取得
+  useEffect(() => {
+    fetch('/api/cards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        colors: [], types: [], costs: [], counters: [], powers: [],
+        attributes: [], blocks: [], features: [], series_ids: [],
+        free_words: '', leader_colors: [], parallel_mode: 'both', has_trigger: null
+      }),
+    })
+      .then(res => res.json())
+      .then(data => setAllCards(data.cards || []))
+      .catch(console.error);
+  }, []);
 
-  // 不足数の合計
-  const totalMissing = wantedCards.reduce((sum, w) => sum + Math.max(0, w.count - w.owned), 0);
-
-  const downloadList = () => {
-    const lines = wantedCards.map(w => {
-      const missing = Math.max(0, w.count - w.owned);
-      return `${w.card.card_id}\t${w.card.name}\t必要${w.count}枚\t所持${w.owned}枚\t不足${missing}枚`;
-    });
-    const header = '=== 必要カードリスト ===\n';
-    const total = `\n合計: 必要${totalWantedCount}枚 / 所持${totalOwnedCount}枚 / 不足${totalMissing}枚`;
-    const text = header + lines.join('\n') + total;
-    
+  // テキスト形式でダウンロード
+  const downloadText = () => {
+    const text = exportToText();
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -192,124 +226,29 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
     URL.revokeObjectURL(url);
   };
 
-  const downloadCSV = () => {
-    const header = 'カードID,カード名,色,タイプ,コスト,必要枚数,所持枚数,不足枚数\n';
-    const lines = wantedCards.map(w => {
-      const missing = Math.max(0, w.count - w.owned);
-      return `${w.card.card_id},"${w.card.name}","${w.card.color.join('/')}",${w.card.type},${w.card.cost},${w.count},${w.owned},${missing}`;
-    });
-    const text = header + lines.join('\n');
-    
-    const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `wanted_cards_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // JSONエクスポート
-  const downloadJSON = () => {
-    const data = wantedCards.map(w => ({
-      card_id: w.card.card_id,
-      card_code: w.card.card_code,
-      name: w.card.name,
-      color: w.card.color,
-      type: w.card.type,
-      cost: w.card.cost,
-      power: w.card.power,
-      counter: w.card.counter,
-      attribute: w.card.attribute,
-      rarity: w.card.rarity,
-      features: w.card.features,
-      text: w.card.text,
-      trigger: w.card.trigger,
-      block_icon: w.card.block_icon,
-      source: w.card.source,
-      series_id: w.card.series_id,
-      image_url: w.card.image_url,
-      is_parallel: w.card.is_parallel,
-      count: w.count,
-      owned: w.owned,
-    }));
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `wanted_cards_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // JSONインポート
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target?.result as string);
-        if (Array.isArray(data)) {
-          const imported: WantedCard[] = data.map(item => ({
-            card: {
-              card_id: item.card_id || '',
-              card_code: item.card_code || '',
-              name: item.name || item.card_id || '',
-              color: item.color || [],
-              type: item.type || 'CHARACTER',
-              cost: item.cost ?? 0,
-              image_url: item.image_url || '',
-              power: item.power ?? 0,
-              counter: item.counter ?? 0,
-              attribute: item.attribute || '',
-              text: item.text || '',
-              trigger: item.trigger || '',
-              features: item.features || [],
-              series_id: item.series_id || '',
-              rarity: item.rarity || '',
-              block_icon: item.block_icon || '',
-              source: item.source || '',
-              is_parallel: item.is_parallel || false,
-            },
-            count: item.count || 0,
-            owned: item.owned || 0,
-          }));
-          importWantedCards(imported);
-          alert(`${imported.length}件のカードをインポートしました`);
-        }
-      } catch (error) {
-        console.error('Import error:', error);
-        alert('インポートに失敗しました');
-      }
-    };
-    reader.readAsText(file);
-    // リセット
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  // 画像生成機能
+  // 画像生成（デッキ画像と同形式）
   const downloadImage = async () => {
     if (wantedCards.length === 0) return;
     setGenerating(true);
 
     try {
-      // レイアウト設定
-      const cardWidth = 100;
-      const cardHeight = 140;
-      const infoHeight = 50;
-      const cols = Math.min(6, wantedCards.length);
-      const rows = Math.ceil(wantedCards.length / cols);
-      const padding = 20;
-      const headerHeight = 60;
-      const footerHeight = 50;
-      const gap = 8;
+      const cardWidth = 149;
+      const cardHeight = 208;
+      const cols = 10;
+      const gap = 2;
+      const padding = 10;
 
+      // カードを展開（必要数分だけ繰り返し）
+      const expandedCards: { card: Card; isOwned: boolean }[] = [];
+      for (const w of wantedCards) {
+        for (let i = 0; i < w.count; i++) {
+          expandedCards.push({ card: w.card, isOwned: i < w.owned });
+        }
+      }
+
+      const rows = Math.ceil(expandedCards.length / cols);
       const canvasWidth = padding * 2 + cols * cardWidth + (cols - 1) * gap;
-      const canvasHeight = padding + headerHeight + rows * (cardHeight + infoHeight) + (rows - 1) * gap + footerHeight;
+      const canvasHeight = padding + rows * cardHeight + (rows - 1) * gap + padding;
 
       const canvas = document.createElement('canvas');
       canvas.width = canvasWidth;
@@ -317,18 +256,10 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       const ctx = canvas.getContext('2d')!;
 
       // 背景
-      ctx.fillStyle = '#f8fafc';
+      ctx.fillStyle = '#1a1a2e';
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-      // ヘッダー
-      ctx.fillStyle = '#fed7aa';
-      ctx.fillRect(0, 0, canvasWidth, headerHeight);
-      ctx.fillStyle = '#c2410c';
-      ctx.font = 'bold 22px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('📋 必要カードリスト', canvasWidth / 2, 38);
-
-      // カード画像を読み込んで描画
+      // 画像読み込み関数
       const loadImage = (url: string): Promise<HTMLImageElement> => {
         return new Promise((resolve, reject) => {
           const img = new Image();
@@ -339,98 +270,50 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         });
       };
 
-      for (let i = 0; i < wantedCards.length; i++) {
-        const { card, count, owned } = wantedCards[i];
+      // カード描画
+      for (let i = 0; i < expandedCards.length; i++) {
+        const { card, isOwned } = expandedCards[i];
         const col = i % cols;
         const row = Math.floor(i / cols);
         const x = padding + col * (cardWidth + gap);
-        const y = padding + headerHeight + row * (cardHeight + infoHeight + gap);
-        const missing = Math.max(0, count - owned);
-
-        // カード背景
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x, y, cardWidth, cardHeight + infoHeight);
-        ctx.strokeStyle = missing > 0 ? '#ef4444' : '#22c55e';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, cardWidth, cardHeight + infoHeight);
+        const y = padding + row * (cardHeight + gap);
 
         // カード画像
         if (card.image_url) {
           try {
             const img = await loadImage(card.image_url);
-            ctx.drawImage(img, x + 2, y + 2, cardWidth - 4, cardHeight - 4);
+            ctx.drawImage(img, x, y, cardWidth, cardHeight);
           } catch {
-            // 画像読み込み失敗時はプレースホルダー
-            const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#94a3b8') : '#94a3b8';
+            const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#666') : '#666';
             ctx.fillStyle = bgColor;
-            ctx.fillRect(x + 2, y + 2, cardWidth - 4, cardHeight - 4);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 10px sans-serif';
+            ctx.fillRect(x, y, cardWidth, cardHeight);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(card.name.slice(0, 6), x + cardWidth / 2, y + cardHeight / 2);
+            ctx.fillText(card.name.slice(0, 8), x + cardWidth / 2, y + cardHeight / 2);
           }
         } else {
-          // 画像なしカード
-          const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#94a3b8') : '#94a3b8';
+          const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#666') : '#666';
           ctx.fillStyle = bgColor;
-          ctx.fillRect(x + 2, y + 2, cardWidth - 4, cardHeight - 4);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 10px sans-serif';
+          ctx.fillRect(x, y, cardWidth, cardHeight);
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 12px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(card.name.slice(0, 6), x + cardWidth / 2, y + cardHeight / 2);
+          ctx.fillText(card.name.slice(0, 8), x + cardWidth / 2, y + cardHeight / 2);
         }
 
-        // 情報エリア背景
-        ctx.fillStyle = missing > 0 ? '#fef2f2' : '#f0fdf4';
-        ctx.fillRect(x + 1, y + cardHeight, cardWidth - 2, infoHeight - 1);
-
-        // カード名
-        ctx.fillStyle = '#1e293b';
-        ctx.font = 'bold 9px sans-serif';
-        ctx.textAlign = 'left';
-        const displayName = card.name.length > 8 ? card.name.slice(0, 8) + '..' : card.name;
-        ctx.fillText(displayName, x + 4, y + cardHeight + 12);
-
-        // カードID
-        ctx.fillStyle = '#64748b';
-        ctx.font = '8px sans-serif';
-        ctx.fillText(card.card_id, x + 4, y + cardHeight + 22);
-
-        // 必要/所持/不足
-        ctx.font = 'bold 9px sans-serif';
-        ctx.fillStyle = '#1e293b';
-        ctx.fillText(`必要: ${count}`, x + 4, y + cardHeight + 34);
-        ctx.fillStyle = '#16a34a';
-        ctx.fillText(`所持: ${owned}`, x + 4, y + cardHeight + 44);
-        
-        // 不足バッジ
-        if (missing > 0) {
-          ctx.fillStyle = '#ef4444';
+        // 所持済みマーク
+        if (isOwned) {
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.8)';
           ctx.beginPath();
-          ctx.arc(x + cardWidth - 14, y + 14, 12, 0, Math.PI * 2);
+          ctx.arc(x + cardWidth - 18, y + 18, 14, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 11px sans-serif';
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 16px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(`${missing}`, x + cardWidth - 14, y + 18);
-        } else if (count > 0) {
-          // 揃った
-          ctx.fillStyle = '#22c55e';
-          ctx.font = 'bold 10px sans-serif';
-          ctx.textAlign = 'right';
-          ctx.fillText('✓', x + cardWidth - 6, y + cardHeight + 44);
+          ctx.fillText('✓', x + cardWidth - 18, y + 23);
         }
       }
-
-      // フッター
-      ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(
-        `必要: ${totalWantedCount}枚 / 所持: ${totalOwnedCount}枚 / 不足: ${totalMissing}枚`, 
-        canvasWidth / 2, 
-        canvasHeight - 20
-      );
 
       // ダウンロード
       const dataUrl = canvas.toDataURL('image/png');
@@ -446,6 +329,15 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  // インポート実行
+  const handleImport = () => {
+    if (!importText.trim()) return;
+    const count = importFromText(importText, allCards);
+    alert(`${count}件のカードをインポートしました`);
+    setShowImportModal(false);
+    setImportText('');
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-[90] flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col">
@@ -453,135 +345,94 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
           <div>
             <h2 className="text-lg font-bold">📋 必要カードリスト</h2>
             <p className="text-sm text-gray-600">
-              必要: {totalWantedCount}枚 / 所持: {totalOwnedCount}枚 / 
-              <span className="text-red-600 font-medium"> 不足: {totalMissing}枚</span>
+              必要: {totalWantedCount}枚 / 所持: {totalOwnedCount}枚 ({wantedCards.length}種類)
             </p>
           </div>
           <button onClick={onClose} className="text-2xl text-gray-500 hover:text-gray-700">×</button>
         </div>
-
-        {/* フィルター */}
-        <div className="px-4 py-2 border-b bg-gray-50 flex items-center gap-2">
-          <span className="text-xs text-gray-500">絞込:</span>
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-2 py-1 text-xs rounded ${filter === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
-          >
-            すべて ({wantedCards.length})
-          </button>
-          <button
-            onClick={() => setFilter('missing')}
-            className={`px-2 py-1 text-xs rounded ${filter === 'missing' ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
-          >
-            不足 ({wantedCards.filter(w => w.count > w.owned).length})
-          </button>
-          <button
-            onClick={() => setFilter('complete')}
-            className={`px-2 py-1 text-xs rounded ${filter === 'complete' ? 'bg-green-500 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
-          >
-            揃った ({wantedCards.filter(w => w.owned >= w.count && w.count > 0).length})
-          </button>
-        </div>
         
         <div className="flex-1 overflow-y-auto p-4">
-          {filteredCards.length === 0 ? (
+          {wantedCards.length === 0 ? (
             <div className="text-center text-gray-500 py-8">
               <div className="text-4xl mb-2">📝</div>
-              <p>{wantedCards.length === 0 ? '必要なカードがありません' : '該当するカードがありません'}</p>
+              <p>必要なカードがありません</p>
               <p className="text-sm mt-1">カード拡大画面から追加できます</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredCards.map(w => {
-                const missing = Math.max(0, w.count - w.owned);
-                return (
-                  <div 
-                    key={w.card.card_id} 
-                    className={`flex items-center gap-2 p-2 rounded border-l-4 ${
-                      missing > 0 ? 'bg-red-50 border-red-400' : 'bg-green-50 border-green-400'
-                    }`}
-                  >
-                    <div className="w-12 h-16 flex-shrink-0 bg-gray-200 rounded overflow-hidden">
-                      {w.card.image_url ? (
-                        <img src={w.card.image_url} alt={w.card.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div 
-                          className="w-full h-full flex items-center justify-center text-white text-xs"
-                          style={{ backgroundColor: COLOR_RGB[w.card.color[0]] || '#94a3b8' }}
-                        >
-                          {w.card.name.slice(0, 4)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{w.card.name}</div>
-                      <div className="text-xs text-gray-500">{w.card.card_id}</div>
-                      {missing > 0 && (
-                        <div className="text-xs text-red-600 font-medium">不足: {missing}枚</div>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      {/* 必要数 */}
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-gray-500 w-6">必要</span>
-                        <button
-                          onClick={() => updateWantedCount(w.card, w.count - 1)}
-                          className="w-5 h-5 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200"
-                        >
-                          -
-                        </button>
-                        <span className="w-5 text-center text-xs font-medium">{w.count}</span>
-                        <button
-                          onClick={() => updateWantedCount(w.card, w.count + 1)}
-                          className="w-5 h-5 bg-green-100 text-green-600 rounded text-xs hover:bg-green-200"
-                        >
-                          +
-                        </button>
+              {wantedCards.map(w => (
+                <div 
+                  key={w.card.card_id} 
+                  className="flex items-center gap-2 p-2 bg-gray-50 rounded"
+                >
+                  <div className="w-12 h-16 flex-shrink-0 bg-gray-200 rounded overflow-hidden">
+                    {w.card.image_url ? (
+                      <img src={w.card.image_url} alt={w.card.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div 
+                        className="w-full h-full flex items-center justify-center text-white text-xs"
+                        style={{ backgroundColor: COLOR_RGB[w.card.color[0]] || '#94a3b8' }}
+                      >
+                        {w.card.name.slice(0, 4)}
                       </div>
-                      {/* 所持数 */}
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-gray-500 w-6">所持</span>
-                        <button
-                          onClick={() => updateOwnedCount(w.card, w.owned - 1)}
-                          disabled={w.owned <= 0}
-                          className={`w-5 h-5 rounded text-xs ${
-                            w.owned > 0 ? 'bg-orange-100 text-orange-600 hover:bg-orange-200' : 'bg-gray-100 text-gray-300'
-                          }`}
-                        >
-                          -
-                        </button>
-                        <span className="w-5 text-center text-xs font-medium">{w.owned}</span>
-                        <button
-                          onClick={() => updateOwnedCount(w.card, w.owned + 1)}
-                          className="w-5 h-5 bg-blue-100 text-blue-600 rounded text-xs hover:bg-blue-200"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removeWantedCard(w.card.card_id)}
-                      className="text-red-400 hover:text-red-600 text-sm"
-                    >
-                      🗑️
-                    </button>
+                    )}
                   </div>
-                );
-              })}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{w.card.name}</div>
+                    <div className="text-xs text-gray-500">{w.card.card_id}</div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {/* 必要数 */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-500 w-6">必要</span>
+                      <button
+                        onClick={() => updateWantedCount(w.card, w.count - 1)}
+                        className="w-5 h-5 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200"
+                      >
+                        -
+                      </button>
+                      <span className="w-5 text-center text-xs font-medium">{w.count}</span>
+                      <button
+                        onClick={() => updateWantedCount(w.card, w.count + 1)}
+                        className="w-5 h-5 bg-green-100 text-green-600 rounded text-xs hover:bg-green-200"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {/* 所持数 */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-500 w-6">所持</span>
+                      <button
+                        onClick={() => updateOwnedCount(w.card, w.owned - 1)}
+                        disabled={w.owned <= 0}
+                        className={`w-5 h-5 rounded text-xs ${
+                          w.owned > 0 ? 'bg-orange-100 text-orange-600 hover:bg-orange-200' : 'bg-gray-100 text-gray-300'
+                        }`}
+                      >
+                        -
+                      </button>
+                      <span className="w-5 text-center text-xs font-medium">{w.owned}</span>
+                      <button
+                        onClick={() => updateOwnedCount(w.card, w.owned + 1)}
+                        className="w-5 h-5 bg-blue-100 text-blue-600 rounded text-xs hover:bg-blue-200"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeWantedCard(w.card.card_id)}
+                    className="text-red-400 hover:text-red-600 text-sm"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>
         
         <div className="p-4 border-t space-y-2">
-          {/* インポート用hidden input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            onChange={handleImport}
-            className="hidden"
-          />
-          
           <div className="flex gap-2">
             <button
               onClick={downloadImage}
@@ -591,33 +442,32 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
               {generating ? '生成中...' : '🖼️ 画像'}
             </button>
             <button
-              onClick={downloadJSON}
+              onClick={() => { setQrMode('export'); setShowQRModal(true); }}
               disabled={wantedCards.length === 0}
               className="flex-1 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
-              📤 JSON
+              📱 QR出力
             </button>
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => { setQrMode('import'); setShowQRModal(true); }}
               className="flex-1 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
             >
-              📥 読込
+              📷 QR読込
             </button>
           </div>
           <div className="flex gap-2">
             <button
-              onClick={downloadList}
+              onClick={downloadText}
               disabled={wantedCards.length === 0}
               className="flex-1 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
-              📝 テキスト
+              📤 出力
             </button>
             <button
-              onClick={downloadCSV}
-              disabled={wantedCards.length === 0}
-              className="flex-1 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              onClick={() => setShowImportModal(true)}
+              className="flex-1 py-2 bg-teal-500 text-white rounded hover:bg-teal-600 text-sm"
             >
-              📊 CSV
+              📥 読込
             </button>
             <button
               onClick={clearWantedCards}
@@ -627,6 +477,242 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
               🗑️ クリア
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* QRモーダル */}
+      {showQRModal && (
+        <WantedQRModal
+          mode={qrMode}
+          qrText={exportToText()}
+          allCards={allCards}
+          onClose={() => setShowQRModal(false)}
+        />
+      )}
+
+      {/* テキストインポートモーダル */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-4 border-b">
+              <h3 className="font-bold">📥 テキストから読込</h3>
+              <p className="text-xs text-gray-500 mt-1">形式: カードID:必要数:所持数（1行1カード）</p>
+            </div>
+            <div className="p-4">
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder={`OP01-001:4:2\nOP01-002:3:1\nOP01-003:4:0`}
+                className="w-full h-40 p-2 border rounded text-sm font-mono"
+              />
+            </div>
+            <div className="p-4 border-t flex gap-2">
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="flex-1 py-2 bg-gray-200 rounded hover:bg-gray-300"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={!importText.trim()}
+                className="flex-1 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+              >
+                インポート
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// QRモーダルコンポーネント
+function WantedQRModal({ 
+  mode, 
+  qrText, 
+  allCards,
+  onClose 
+}: { 
+  mode: 'export' | 'import'; 
+  qrText: string; 
+  allCards: Card[];
+  onClose: () => void;
+}) {
+  const [scanning, setScanning] = useState(false);
+  const [scannedText, setScannedText] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>();
+  const { importFromText } = useWantedCards();
+
+  // QRコード生成
+  useEffect(() => {
+    if (mode === 'export' && qrText) {
+      import('qrcode').then(QRCode => {
+        QRCode.default.toDataURL(qrText, { width: 300, margin: 2 })
+          .then(setQrDataUrl)
+          .catch(console.error);
+      });
+    }
+  }, [mode, qrText]);
+
+  // QRスキャン開始
+  const startScanning = async () => {
+    setScanning(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+        scanQR();
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      alert('カメラを起動できませんでした');
+      setScanning(false);
+    }
+  };
+
+  // QRスキャン処理
+  const scanQR = async () => {
+    const jsQR = (await import('jsqr')).default;
+    
+    const scan = () => {
+      if (!videoRef.current || !canvasRef.current) return;
+      
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        animationRef.current = requestAnimationFrame(scan);
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+      if (code) {
+        setScannedText(code.data);
+        stopScanning();
+        return;
+      }
+
+      animationRef.current = requestAnimationFrame(scan);
+    };
+
+    animationRef.current = requestAnimationFrame(scan);
+  };
+
+  // スキャン停止
+  const stopScanning = () => {
+    setScanning(false);
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  // インポート処理
+  const handleImport = () => {
+    if (!scannedText) return;
+    const count = importFromText(scannedText, allCards);
+    alert(`${count}件のカードをインポートしました`);
+    onClose();
+  };
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      stopScanning();
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-[100] flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+        <div className="p-4 border-b flex items-center justify-between">
+          <h3 className="font-bold">
+            {mode === 'export' ? '📱 QRコード出力' : '📷 QRコード読込'}
+          </h3>
+          <button onClick={() => { stopScanning(); onClose(); }} className="text-xl">×</button>
+        </div>
+        
+        <div className="p-4">
+          {mode === 'export' ? (
+            <div className="text-center">
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="QR Code" className="mx-auto" />
+              ) : (
+                <div className="py-8 text-gray-500">QRコード生成中...</div>
+              )}
+              <p className="text-sm text-gray-600 mt-2">
+                このQRコードをスキャンしてインポートできます
+              </p>
+            </div>
+          ) : (
+            <div>
+              {scanning ? (
+                <div>
+                  <video ref={videoRef} className="w-full rounded" />
+                  <canvas ref={canvasRef} className="hidden" />
+                  <button 
+                    onClick={stopScanning}
+                    className="w-full mt-2 py-2 bg-red-500 text-white rounded"
+                  >
+                    スキャン停止
+                  </button>
+                </div>
+              ) : scannedText ? (
+                <div>
+                  <div className="p-2 bg-green-50 rounded mb-2">
+                    <p className="text-sm text-green-700">✓ QRコードを読み取りました</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {scannedText.split('\n').filter(l => l.trim()).length}件のカード情報
+                    </p>
+                  </div>
+                  <button 
+                    onClick={handleImport}
+                    className="w-full py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  >
+                    インポート実行
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <button 
+                    onClick={startScanning}
+                    className="w-full py-3 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  >
+                    📷 カメラでスキャン開始
+                  </button>
+                  <p className="text-sm text-gray-500 mt-2">
+                    必要カードリストのQRコードをスキャンします
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        
+        <div className="p-4 border-t">
+          <button 
+            onClick={() => { stopScanning(); onClose(); }}
+            className="w-full py-2 bg-gray-200 rounded hover:bg-gray-300"
+          >
+            閉じる
+          </button>
         </div>
       </div>
     </div>

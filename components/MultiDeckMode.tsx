@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, Deck, FilterOptions, DEFAULT_FILTER_OPTIONS, UNLIMITED_CARDS, COLOR_PRIORITY } from '@/lib/types';
 import FilterPanel from './FilterPanel';
 import CardGrid from './CardGrid';
@@ -110,6 +110,7 @@ export default function MultiDeckMode() {
   const [filterMeta, setFilterMeta] = useState<FilterMeta | null>(null);
   const [loading, setLoading] = useState(false);
   const [colsCount, setColsCount] = useState(4);
+  const [wantedOnly, setWantedOnly] = useState(false);
 
   // UI状態
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -120,7 +121,14 @@ export default function MultiDeckMode() {
   const [newTagInput, setNewTagInput] = useState('');
 
   // 必要カードリスト
-  const { updateWantedCount, updateOwnedCount, getWantedCount, getOwnedCount } = useWantedCards();
+  const { updateWantedCount, updateOwnedCount, getWantedCount, getOwnedCount, getWantedCardIds } = useWantedCards();
+
+  // 必要リストフィルター適用
+  const displayCards = useMemo(() => {
+    if (!wantedOnly) return filteredCards;
+    const wantedIds = getWantedCardIds();
+    return filteredCards.filter(c => wantedIds.includes(c.card_id));
+  }, [filteredCards, wantedOnly, getWantedCardIds]);
 
   // タブが変更されたらsessionStorageに保存
   useEffect(() => {
@@ -1113,6 +1121,20 @@ export default function MultiDeckMode() {
                       hideLeaderType={true}
                     />
                   )}
+                  {/* 必要リストフィルター */}
+                  <div className="mt-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={wantedOnly}
+                        onChange={(e) => setWantedOnly(e.target.checked)}
+                        className="w-4 h-4 rounded text-orange-500"
+                      />
+                      <span className="text-sm font-medium text-orange-700">
+                        📋 必要リストのカードのみ表示
+                      </span>
+                    </label>
+                  </div>
                   <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                     <label className="block text-sm font-medium text-gray-700 mb-2">表示列数</label>
                     <select value={colsCount} onChange={(e) => setColsCount(Number(e.target.value))} className="w-full border rounded px-3 py-2">
@@ -1130,17 +1152,20 @@ export default function MultiDeckMode() {
               <div className="flex-1">
                 <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
                   <div>
-                    <h2 className="text-lg font-bold">➕ カードを追加</h2>
+                    <h2 className="text-lg font-bold">
+                      ➕ カードを追加
+                      {wantedOnly && <span className="ml-2 text-sm text-orange-600">（必要リストのみ）</span>}
+                    </h2>
                     <p className="text-sm text-gray-600">リーダー: {activeTab.leaderCard.name}（{activeTab.leaderCard.color.join('/')}）</p>
                   </div>
                   <button onClick={() => updateTab(activeTabId, { view: 'preview' })} className="btn btn-secondary">🔙 プレビューに戻る</button>
                 </div>
-                <div className="mb-4"><p className="text-sm text-gray-600">表示中: {filteredCards.length}枚</p></div>
+                <div className="mb-4"><p className="text-sm text-gray-600">表示中: {displayCards.length}枚</p></div>
                 {loading ? (
                   <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" /></div>
                 ) : (
                   <CardGrid
-                    cards={filteredCards}
+                    cards={displayCards}
                     colsCount={colsCount}
                     onCardClick={handleAddCard}
                     onCardRemove={(card) => handleRemoveCard(card.card_id)}
