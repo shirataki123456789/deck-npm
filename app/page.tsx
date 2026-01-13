@@ -11,15 +11,15 @@ type Mode = 'search' | 'deck' | 'multi';
 function WantedCardsButton({ onClick }: { onClick: () => void }) {
   const { totalWantedCount } = useWantedCards();
   
-  if (totalWantedCount === 0) return null;
-  
   return (
     <button
       onClick={onClick}
       className="px-3 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 flex items-center gap-1"
     >
       📋 <span className="hidden sm:inline">必要リスト</span>
-      <span className="bg-orange-700 px-1.5 py-0.5 rounded text-xs">{totalWantedCount}</span>
+      {totalWantedCount > 0 && (
+        <span className="bg-orange-700 px-1.5 py-0.5 rounded text-xs">{totalWantedCount}</span>
+      )}
     </button>
   );
 }
@@ -27,6 +27,7 @@ function WantedCardsButton({ onClick }: { onClick: () => void }) {
 function HomeContent() {
   const [mode, setMode] = useState<Mode>('search');
   const [showWantedPanel, setShowWantedPanel] = useState(false);
+  const { totalWantedCount } = useWantedCards();
 
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
@@ -70,11 +71,6 @@ function HomeContent() {
               >
                 🗂️ マルチデッキ
               </button>
-              <WantedCardsButton onClick={() => setShowWantedPanel(true)} />
-            </div>
-            
-            {/* モバイル用必要リストボタン */}
-            <div className="sm:hidden">
               <WantedCardsButton onClick={() => setShowWantedPanel(true)} />
             </div>
           </div>
@@ -123,6 +119,18 @@ function HomeContent() {
           >
             <div className="text-lg">🗂️</div>
             <div className="text-xs">マルチ</div>
+          </button>
+          <button
+            onClick={() => setShowWantedPanel(true)}
+            className="flex-1 py-3 text-center font-medium transition-colors bg-orange-500 text-white relative"
+          >
+            <div className="text-lg">📋</div>
+            <div className="text-xs">必要リスト</div>
+            {totalWantedCount > 0 && (
+              <span className="absolute top-1 right-2 bg-orange-700 text-white text-[10px] px-1 rounded-full">
+                {totalWantedCount}
+              </span>
+            )}
           </button>
         </div>
       </nav>
