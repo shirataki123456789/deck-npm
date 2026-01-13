@@ -196,6 +196,7 @@ export default function SearchMode() {
             getWantedCount={getWantedCount}
             getOwnedCount={getOwnedCount}
             showWantedBadge={wantedOnly}
+            clickToZoom={true}
           />
         )}
       </div>

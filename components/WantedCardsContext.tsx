@@ -237,7 +237,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       .catch(console.error);
   }, []);
 
-  // 画像生成（2150x2048、QR付き、カードまとめ表示）
+  // 画像生成（2150x可変高さ、QR付き、カードまとめ表示）
   const downloadImage = async () => {
     if (wantedCards.length === 0) return;
     setGenerating(true);
@@ -246,7 +246,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
     try {
       // 画像サイズ
       const FINAL_WIDTH = 2150;
-      const FINAL_HEIGHT = 2048;
+      const MIN_HEIGHT = 2048;
       const PADDING = 40;
       const HEADER_HEIGHT = 100;
       const QR_SIZE = 350;
@@ -258,6 +258,12 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       const CARD_HEIGHT = Math.floor(CARD_WIDTH * 1.4);
       const INFO_HEIGHT = 85;
       const CARD_TOTAL_HEIGHT = CARD_HEIGHT + INFO_HEIGHT;
+
+      // 必要な行数を計算
+      const rows = Math.ceil(wantedCards.length / COLS);
+      const gridHeight = rows * (CARD_TOTAL_HEIGHT + GAP);
+      const contentHeight = HEADER_HEIGHT + 20 + Math.max(QR_SIZE + 50, gridHeight) + PADDING;
+      const FINAL_HEIGHT = Math.max(MIN_HEIGHT, contentHeight);
 
       const canvas = document.createElement('canvas');
       canvas.width = FINAL_WIDTH;
@@ -329,8 +335,6 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         const x = gridStartX + col * (CARD_WIDTH + GAP);
         const y = gridStartY + row * (CARD_TOTAL_HEIGHT + GAP);
 
-        // 画面外はスキップ
-        if (y + CARD_TOTAL_HEIGHT > FINAL_HEIGHT - PADDING) continue;
         // QRと被る場合はスキップ（最初の行の右側2列）
         if (row === 0 && col >= 6) continue;
 

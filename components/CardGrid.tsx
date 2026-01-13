@@ -21,6 +21,8 @@ interface CardGridProps {
   getOwnedCount?: (cardId: string) => number;
   // 必要リストフィルターモード
   showWantedBadge?: boolean;
+  // カードクリックで直接虫眼鏡を開く
+  clickToZoom?: boolean;
 }
 
 export default function CardGrid({
@@ -37,8 +39,13 @@ export default function CardGrid({
   getWantedCount,
   getOwnedCount,
   showWantedBadge = false,
+  clickToZoom = false,
 }: CardGridProps) {
-  const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
+  const [zoomedIndex, setZoomedIndex] = useState<number | null>(null);
+  
+  const handleNavigate = (index: number) => {
+    setZoomedIndex(index);
+  };
   
   return (
     <>
@@ -55,24 +62,30 @@ export default function CardGrid({
             onAdd={onCardClick}
             onRemove={onCardRemove}
             onReset={onCardReset}
-            onZoom={() => setZoomedCard(card)}
+            onZoom={() => setZoomedIndex(idx)}
             showAddButton={showAddButton}
             count={getCardCount?.(card.card_id)}
             canAdd={canAddCard?.(card.card_id)}
             colsCount={colsCount}
             wantedCount={showWantedBadge && getWantedCount ? getWantedCount(card.card_id) : undefined}
+            clickToZoom={clickToZoom}
           />
         ))}
       </div>
       
-      {/* 画像拡大モーダル */}
+      {/* 画像拡大モーダル（フリック対応） */}
       <ImageModal
-        card={zoomedCard}
-        onClose={() => setZoomedCard(null)}
+        card={zoomedIndex !== null ? cards[zoomedIndex] : null}
+        onClose={() => setZoomedIndex(null)}
         onUpdateWantedCount={onUpdateWantedCount}
         onUpdateOwnedCount={onUpdateOwnedCount}
-        wantedCount={zoomedCard && getWantedCount ? getWantedCount(zoomedCard.card_id) : 0}
-        ownedCount={zoomedCard && getOwnedCount ? getOwnedCount(zoomedCard.card_id) : 0}
+        wantedCount={zoomedIndex !== null && getWantedCount ? getWantedCount(cards[zoomedIndex].card_id) : 0}
+        ownedCount={zoomedIndex !== null && getOwnedCount ? getOwnedCount(cards[zoomedIndex].card_id) : 0}
+        cards={cards}
+        currentIndex={zoomedIndex ?? undefined}
+        onNavigate={handleNavigate}
+        getWantedCount={getWantedCount}
+        getOwnedCount={getOwnedCount}
       />
     </>
   );
@@ -161,6 +174,7 @@ interface CardItemProps {
   canAdd?: boolean;
   colsCount: number;
   wantedCount?: number;
+  clickToZoom?: boolean;
 }
 
 function CardItem({
@@ -174,6 +188,7 @@ function CardItem({
   canAdd = true,
   colsCount,
   wantedCount,
+  clickToZoom = false,
 }: CardItemProps) {
   const isUnlimited = UNLIMITED_CARDS.includes(card.card_id);
   const maxCount = isUnlimited ? 99 : 4;
@@ -184,6 +199,12 @@ function CardItem({
   const isBlankCard = !card.image_url;
   
   const handleImageClick = () => {
+    // clickToZoomの場合は虫眼鏡を開く
+    if (clickToZoom) {
+      onZoom?.();
+      return;
+    }
+    
     if (!showAddButton) return;
     
     const currentCount = count || 0;
