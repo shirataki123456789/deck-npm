@@ -195,6 +195,7 @@ export default function SearchMode() {
             onUpdateOwnedCount={updateOwnedCount}
             getWantedCount={getWantedCount}
             getOwnedCount={getOwnedCount}
+            showWantedBadge={wantedOnly}
           />
         )}
       </div>

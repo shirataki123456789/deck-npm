@@ -696,6 +696,7 @@ export default function DeckMode() {
                   onUpdateOwnedCount={updateOwnedCount}
                   getWantedCount={getWantedCount}
                   getOwnedCount={getOwnedCount}
+                  showWantedBadge={wantedOnly}
                 />
               )}
             </div>

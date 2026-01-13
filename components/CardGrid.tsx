@@ -19,6 +19,8 @@ interface CardGridProps {
   onUpdateOwnedCount?: (card: Card, owned: number) => void;
   getWantedCount?: (cardId: string) => number;
   getOwnedCount?: (cardId: string) => number;
+  // 必要リストフィルターモード
+  showWantedBadge?: boolean;
 }
 
 export default function CardGrid({
@@ -34,6 +36,7 @@ export default function CardGrid({
   onUpdateOwnedCount,
   getWantedCount,
   getOwnedCount,
+  showWantedBadge = false,
 }: CardGridProps) {
   const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
   
@@ -57,6 +60,7 @@ export default function CardGrid({
             count={getCardCount?.(card.card_id)}
             canAdd={canAddCard?.(card.card_id)}
             colsCount={colsCount}
+            wantedCount={showWantedBadge && getWantedCount ? getWantedCount(card.card_id) : undefined}
           />
         ))}
       </div>
@@ -156,6 +160,7 @@ interface CardItemProps {
   count?: number;
   canAdd?: boolean;
   colsCount: number;
+  wantedCount?: number;
 }
 
 function CardItem({
@@ -168,6 +173,7 @@ function CardItem({
   count,
   canAdd = true,
   colsCount,
+  wantedCount,
 }: CardItemProps) {
   const isUnlimited = UNLIMITED_CARDS.includes(card.card_id);
   const maxCount = isUnlimited ? 99 : 4;
@@ -244,8 +250,13 @@ function CardItem({
       {/* カード情報（ブランクカードは非表示） */}
       {!isCompact && !isBlankCard && (
         <div className="p-1.5 sm:p-2">
-          <div className="text-xs sm:text-sm font-medium truncate" title={card.name}>
+          <div className="text-xs sm:text-sm font-medium truncate flex items-center gap-1" title={card.name}>
             {card.name}
+            {wantedCount !== undefined && wantedCount > 0 && (
+              <span className="bg-orange-500 text-white text-[10px] px-1 rounded-full">
+                必要{wantedCount}
+              </span>
+            )}
           </div>
           <div className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 sm:gap-2">
             <span>{card.card_id}</span>

@@ -190,10 +190,8 @@ async function loadImageWithProxy(url: string): Promise<HTMLImageElement | null>
   };
 
   try {
-    // 直接ロードを試みる
     return await loadImage(url);
   } catch {
-    // CORSエラーの場合はプロキシを使用
     try {
       const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
       return await loadImage(proxyUrl);
@@ -220,10 +218,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
   
   const [generating, setGenerating] = useState(false);
   const [generateProgress, setGenerateProgress] = useState('');
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [qrMode, setQrMode] = useState<'export' | 'import'>('export');
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importText, setImportText] = useState('');
+  const [showQRImportModal, setShowQRImportModal] = useState(false);
   const [allCards, setAllCards] = useState<Card[]>([]);
 
   // カードデータ取得
@@ -242,69 +237,99 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       .catch(console.error);
   }, []);
 
-  // テキスト形式でダウンロード
-  const downloadText = () => {
-    const text = exportToText();
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `wanted_cards_${new Date().toISOString().split('T')[0]}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // 画像生成（デッキ画像と同じサイズ）
+  // 画像生成（2150x2048、QR付き）
   const downloadImage = async () => {
     if (wantedCards.length === 0) return;
     setGenerating(true);
     setGenerateProgress('準備中...');
 
     try {
-      // デッキ画像と同じサイズ設定
-      const CARD_WIDTH = 149;
-      const CARD_HEIGHT = 208;
-      const INFO_HEIGHT = 60;
-      const COLS = 6;
-      const GAP = 4;
-      const PADDING = 20;
-      const HEADER_HEIGHT = 60;
-
-      const rows = Math.ceil(wantedCards.length / COLS);
-      const canvasWidth = PADDING * 2 + COLS * CARD_WIDTH + (COLS - 1) * GAP;
-      const canvasHeight = PADDING + HEADER_HEIGHT + rows * (CARD_HEIGHT + INFO_HEIGHT) + (rows - 1) * GAP + PADDING;
+      // デッキ画像と同じサイズ
+      const FINAL_WIDTH = 2150;
+      const FINAL_HEIGHT = 2048;
+      const CARD_WIDTH = 215;
+      const CARD_HEIGHT = 300;
+      const CARDS_PER_ROW = 10;
+      const CARDS_PER_COL = 5;
+      const QR_SIZE = 400;
+      const GAP = 48;
+      const HEADER_HEIGHT = 120;
+      const GRID_START_Y = HEADER_HEIGHT + GAP;
 
       const canvas = document.createElement('canvas');
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
+      canvas.width = FINAL_WIDTH;
+      canvas.height = FINAL_HEIGHT;
       const ctx = canvas.getContext('2d')!;
 
-      // 背景
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      // 背景（グラデーション）
+      const gradient = ctx.createLinearGradient(0, 0, FINAL_WIDTH, 0);
+      gradient.addColorStop(0, '#f97316');
+      gradient.addColorStop(1, '#ea580c');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, FINAL_WIDTH, FINAL_HEIGHT);
 
-      // ヘッダー
-      ctx.fillStyle = '#fed7aa';
-      ctx.fillRect(0, 0, canvasWidth, HEADER_HEIGHT);
-      ctx.fillStyle = '#c2410c';
-      ctx.font = 'bold 24px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('📋 必要カードリスト', canvasWidth / 2, 40);
+      // ヘッダー背景
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.fillRect(0, 0, FINAL_WIDTH, HEADER_HEIGHT);
+
+      // タイトル
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 48px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('📋 必要カードリスト', GAP, 75);
+
+      // サマリー
+      ctx.font = '32px sans-serif';
+      ctx.fillText(`必要: ${totalWantedCount}枚 / 所持: ${totalOwnedCount}枚 (${wantedCards.length}種類)`, GAP, 110);
+
+      // QRコード生成
+      setGenerateProgress('QRコード生成中...');
+      const qrText = exportToText();
+      let qrDataUrl = '';
+      if (qrText) {
+        const QRCode = (await import('qrcode')).default;
+        qrDataUrl = await QRCode.toDataURL(qrText, {
+          width: QR_SIZE,
+          margin: 2,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+      }
+
+      // QRコード描画（右上）
+      if (qrDataUrl) {
+        const qrImg = await loadImageWithProxy(qrDataUrl);
+        if (qrImg) {
+          const qrX = FINAL_WIDTH - QR_SIZE - GAP;
+          const qrY = GAP;
+          ctx.drawImage(qrImg, qrX, qrY, QR_SIZE, QR_SIZE);
+        }
+      }
+
+      // カードを展開（必要数分）
+      const expandedCards: { card: Card; count: number; owned: number; index: number }[] = [];
+      for (const w of wantedCards) {
+        for (let i = 0; i < w.count; i++) {
+          expandedCards.push({ 
+            card: w.card, 
+            count: w.count, 
+            owned: w.owned,
+            index: i 
+          });
+        }
+      }
+
+      // 最大50枚まで描画
+      const cardsToRender = expandedCards.slice(0, CARDS_PER_ROW * CARDS_PER_COL);
 
       // カード描画
-      for (let i = 0; i < wantedCards.length; i++) {
-        const { card, count, owned } = wantedCards[i];
-        const col = i % COLS;
-        const row = Math.floor(i / COLS);
-        const x = PADDING + col * (CARD_WIDTH + GAP);
-        const y = PADDING + HEADER_HEIGHT + row * (CARD_HEIGHT + INFO_HEIGHT + GAP);
-        const missing = Math.max(0, count - owned);
+      for (let i = 0; i < cardsToRender.length; i++) {
+        const { card, owned, index } = cardsToRender[i];
+        const col = i % CARDS_PER_ROW;
+        const row = Math.floor(i / CARDS_PER_ROW);
+        const x = (FINAL_WIDTH - CARDS_PER_ROW * CARD_WIDTH) / 2 + col * CARD_WIDTH;
+        const y = GRID_START_Y + QR_SIZE + GAP + row * CARD_HEIGHT;
 
-        setGenerateProgress(`カード読み込み中... ${i + 1}/${wantedCards.length}`);
-
-        // カード背景（枠）
-        ctx.fillStyle = missing > 0 ? '#fecaca' : '#bbf7d0';
-        ctx.fillRect(x - 2, y - 2, CARD_WIDTH + 4, CARD_HEIGHT + INFO_HEIGHT + 4);
+        setGenerateProgress(`カード読み込み中... ${i + 1}/${cardsToRender.length}`);
 
         // カード画像
         if (card.image_url) {
@@ -312,68 +337,34 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
           if (img) {
             ctx.drawImage(img, x, y, CARD_WIDTH, CARD_HEIGHT);
           } else {
-            // 画像読み込み失敗時はプレースホルダー
             const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#94a3b8') : '#94a3b8';
             ctx.fillStyle = bgColor;
             ctx.fillRect(x, y, CARD_WIDTH, CARD_HEIGHT);
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 14px sans-serif';
+            ctx.font = 'bold 18px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(card.name.slice(0, 8), x + CARD_WIDTH / 2, y + CARD_HEIGHT / 2);
+            ctx.fillText(card.name.slice(0, 6), x + CARD_WIDTH / 2, y + CARD_HEIGHT / 2);
           }
         } else {
-          // 画像なしカード
           const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#94a3b8') : '#94a3b8';
           ctx.fillStyle = bgColor;
           ctx.fillRect(x, y, CARD_WIDTH, CARD_HEIGHT);
           ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 14px sans-serif';
+          ctx.font = 'bold 18px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(card.name.slice(0, 8), x + CARD_WIDTH / 2, y + CARD_HEIGHT / 2);
+          ctx.fillText(card.name.slice(0, 6), x + CARD_WIDTH / 2, y + CARD_HEIGHT / 2);
         }
 
-        // 情報エリア背景
-        ctx.fillStyle = missing > 0 ? '#fef2f2' : '#f0fdf4';
-        ctx.fillRect(x, y + CARD_HEIGHT, CARD_WIDTH, INFO_HEIGHT);
-
-        // カード名
-        ctx.fillStyle = '#1e293b';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'left';
-        const displayName = card.name.length > 10 ? card.name.slice(0, 10) + '..' : card.name;
-        ctx.fillText(displayName, x + 4, y + CARD_HEIGHT + 14);
-
-        // カードID
-        ctx.fillStyle = '#64748b';
-        ctx.font = '10px sans-serif';
-        ctx.fillText(card.card_id, x + 4, y + CARD_HEIGHT + 26);
-
-        // 必要/所持
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillStyle = '#1e293b';
-        ctx.fillText(`必要: ${count}`, x + 4, y + CARD_HEIGHT + 40);
-        ctx.fillStyle = '#16a34a';
-        ctx.fillText(`所持: ${owned}`, x + 4, y + CARD_HEIGHT + 52);
-        
-        // 不足バッジまたは完了マーク
-        if (missing > 0) {
-          ctx.fillStyle = '#ef4444';
+        // 所持済みマーク（緑チェック）
+        if (index < owned) {
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
           ctx.beginPath();
-          ctx.arc(x + CARD_WIDTH - 16, y + 16, 14, 0, Math.PI * 2);
+          ctx.arc(x + CARD_WIDTH - 25, y + 25, 20, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 12px sans-serif';
+          ctx.font = 'bold 24px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(`${missing}`, x + CARD_WIDTH - 16, y + 21);
-        } else if (count > 0) {
-          ctx.fillStyle = '#22c55e';
-          ctx.beginPath();
-          ctx.arc(x + CARD_WIDTH - 16, y + 16, 14, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 16px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('✓', x + CARD_WIDTH - 16, y + 22);
+          ctx.fillText('✓', x + CARD_WIDTH - 25, y + 33);
         }
       }
 
@@ -392,15 +383,6 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       setGenerating(false);
       setGenerateProgress('');
     }
-  };
-
-  // インポート実行
-  const handleImport = () => {
-    if (!importText.trim()) return;
-    const count = importFromText(importText, allCards);
-    alert(`${count}件のカードをインポートしました`);
-    setShowImportModal(false);
-    setImportText('');
   };
 
   return (
@@ -497,7 +479,8 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
           )}
         </div>
         
-        <div className="p-4 border-t space-y-2">
+        {/* ボタン: 画像、QR読み込み、クリア */}
+        <div className="p-4 border-t">
           <div className="flex gap-2">
             <button
               onClick={downloadImage}
@@ -507,32 +490,10 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
               {generating ? generateProgress || '生成中...' : '🖼️ 画像'}
             </button>
             <button
-              onClick={() => { setQrMode('export'); setShowQRModal(true); }}
-              disabled={wantedCards.length === 0}
-              className="flex-1 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-            >
-              📱 QR出力
-            </button>
-            <button
-              onClick={() => { setQrMode('import'); setShowQRModal(true); }}
+              onClick={() => setShowQRImportModal(true)}
               className="flex-1 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
             >
               📷 QR読込
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={downloadText}
-              disabled={wantedCards.length === 0}
-              className="flex-1 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-            >
-              📤 出力
-            </button>
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="flex-1 py-2 bg-teal-500 text-white rounded hover:bg-teal-600 text-sm"
-            >
-              📥 読込
             </button>
             <button
               onClick={clearWantedCards}
@@ -545,82 +506,29 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {/* QRモーダル */}
-      {showQRModal && (
-        <WantedQRModal
-          mode={qrMode}
-          qrText={exportToText()}
+      {/* QRインポートモーダル */}
+      {showQRImportModal && (
+        <QRImportModal
           allCards={allCards}
-          onClose={() => setShowQRModal(false)}
+          onClose={() => setShowQRImportModal(false)}
         />
-      )}
-
-      {/* テキストインポートモーダル */}
-      {showImportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="p-4 border-b">
-              <h3 className="font-bold">📥 テキストから読込</h3>
-              <p className="text-xs text-gray-500 mt-1">形式: カードID:必要数:所持数（1行1カード）</p>
-            </div>
-            <div className="p-4">
-              <textarea
-                value={importText}
-                onChange={(e) => setImportText(e.target.value)}
-                placeholder={`OP01-001:4:2\nOP01-002:3:1\nOP01-003:4:0`}
-                className="w-full h-40 p-2 border rounded text-sm font-mono"
-              />
-            </div>
-            <div className="p-4 border-t flex gap-2">
-              <button
-                onClick={() => setShowImportModal(false)}
-                className="flex-1 py-2 bg-gray-200 rounded hover:bg-gray-300"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleImport}
-                disabled={!importText.trim()}
-                className="flex-1 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-              >
-                インポート
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
 }
 
-// QRモーダルコンポーネント
-function WantedQRModal({ 
-  mode, 
-  qrText, 
+// QRインポートモーダル
+function QRImportModal({ 
   allCards,
   onClose 
 }: { 
-  mode: 'export' | 'import'; 
-  qrText: string; 
   allCards: Card[];
   onClose: () => void;
 }) {
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [scannedText, setScannedText] = useState('');
   const [processing, setProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { importFromText } = useWantedCards();
-
-  // QRコード生成
-  useEffect(() => {
-    if (mode === 'export' && qrText) {
-      import('qrcode').then(QRCode => {
-        QRCode.default.toDataURL(qrText, { width: 300, margin: 2 })
-          .then(setQrDataUrl)
-          .catch(console.error);
-      });
-    }
-  }, [mode, qrText]);
 
   // 画像からQRコード読み取り
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -631,7 +539,6 @@ function WantedQRModal({
     try {
       const jsQR = (await import('jsqr')).default;
       
-      // 画像を読み込み
       const img = new Image();
       const url = URL.createObjectURL(file);
       
@@ -641,14 +548,12 @@ function WantedQRModal({
         img.src = url;
       });
 
-      // Canvasに描画
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0);
 
-      // QRコード読み取り
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
 
@@ -670,7 +575,6 @@ function WantedQRModal({
     }
   };
 
-  // インポート処理
   const handleImport = () => {
     if (!scannedText) return;
     const count = importFromText(scannedText, allCards);
@@ -682,71 +586,54 @@ function WantedQRModal({
     <div className="fixed inset-0 bg-black bg-opacity-70 z-[100] flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
         <div className="p-4 border-b flex items-center justify-between">
-          <h3 className="font-bold">
-            {mode === 'export' ? '📱 QRコード出力' : '📷 QRコード読込'}
-          </h3>
+          <h3 className="font-bold">📷 QRコード読込</h3>
           <button onClick={onClose} className="text-xl">×</button>
         </div>
         
         <div className="p-4">
-          {mode === 'export' ? (
-            <div className="text-center">
-              {qrDataUrl ? (
-                <img src={qrDataUrl} alt="QR Code" className="mx-auto" />
-              ) : (
-                <div className="py-8 text-gray-500">QRコード生成中...</div>
-              )}
-              <p className="text-sm text-gray-600 mt-2">
-                このQRコードをスキャンしてインポートできます
-              </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            className="hidden"
+          />
+          
+          {scannedText ? (
+            <div>
+              <div className="p-2 bg-green-50 rounded mb-2">
+                <p className="text-sm text-green-700">✓ QRコードを読み取りました</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {scannedText.split('\n').filter(l => l.trim()).length}件のカード情報
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setScannedText('')}
+                  className="flex-1 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                >
+                  別の画像
+                </button>
+                <button 
+                  onClick={handleImport}
+                  className="flex-1 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  インポート
+                </button>
+              </div>
             </div>
           ) : (
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
-                className="hidden"
-              />
-              
-              {scannedText ? (
-                <div>
-                  <div className="p-2 bg-green-50 rounded mb-2">
-                    <p className="text-sm text-green-700">✓ QRコードを読み取りました</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {scannedText.split('\n').filter(l => l.trim()).length}件のカード情報
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setScannedText('')}
-                      className="flex-1 py-2 bg-gray-200 rounded hover:bg-gray-300"
-                    >
-                      別の画像
-                    </button>
-                    <button 
-                      onClick={handleImport}
-                      className="flex-1 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                    >
-                      インポート
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center">
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={processing}
-                    className="w-full py-3 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                  >
-                    {processing ? '読み取り中...' : '🖼️ 画像を選択'}
-                  </button>
-                  <p className="text-sm text-gray-500 mt-2">
-                    QRコードの画像を選択してください
-                  </p>
-                </div>
-              )}
+            <div className="text-center">
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={processing}
+                className="w-full py-3 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+              >
+                {processing ? '読み取り中...' : '🖼️ 画像を選択'}
+              </button>
+              <p className="text-sm text-gray-500 mt-2">
+                QRコードの画像を選択してください
+              </p>
             </div>
           )}
         </div>

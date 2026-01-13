@@ -1179,6 +1179,7 @@ export default function MultiDeckMode() {
                     onUpdateOwnedCount={updateOwnedCount}
                     getWantedCount={getWantedCount}
                     getOwnedCount={getOwnedCount}
+                    showWantedBadge={wantedOnly}
                   />
                 )}
               </div>
