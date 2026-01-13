@@ -301,7 +301,6 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
     try {
       // 画像サイズ
       const FINAL_WIDTH = 2150;
-      const FINAL_HEIGHT = 2048;
       const PADDING = 40;
       const HEADER_HEIGHT = 100;
       const QR_SIZE = 300;
@@ -320,6 +319,11 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       // カードグリッドの開始位置（QRの下から）
       const gridStartX = PADDING;
       const gridStartY = HEADER_HEIGHT + QR_AREA_HEIGHT + 20;
+
+      // 必要な行数を計算して画像の高さを決定
+      const rows = Math.ceil(sortedWantedCards.length / COLS);
+      const gridHeight = rows * (CARD_TOTAL_HEIGHT + GAP);
+      const FINAL_HEIGHT = Math.max(2048, gridStartY + gridHeight + PADDING);
 
       const canvas = document.createElement('canvas');
       canvas.width = FINAL_WIDTH;
@@ -378,7 +382,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         }
       }
 
-      // カード描画（QRの下から開始）
+      // カード描画（QRの下から開始、すべて含める）
       for (let i = 0; i < sortedWantedCards.length; i++) {
         const { card, count, owned } = sortedWantedCards[i];
         const col = i % COLS;
@@ -386,9 +390,6 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         
         const x = gridStartX + col * (CARD_WIDTH + GAP);
         const y = gridStartY + row * (CARD_TOTAL_HEIGHT + GAP);
-
-        // 画面外はスキップ
-        if (y + CARD_TOTAL_HEIGHT > FINAL_HEIGHT - PADDING) continue;
 
         setGenerateProgress(`カード読み込み中... ${i + 1}/${sortedWantedCards.length}`);
 
