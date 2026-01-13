@@ -237,24 +237,27 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       .catch(console.error);
   }, []);
 
-  // 画像生成（2150x2048、QR付き）
+  // 画像生成（2150x2048、QR付き、カードまとめ表示）
   const downloadImage = async () => {
     if (wantedCards.length === 0) return;
     setGenerating(true);
     setGenerateProgress('準備中...');
 
     try {
-      // デッキ画像と同じサイズ
+      // 画像サイズ
       const FINAL_WIDTH = 2150;
       const FINAL_HEIGHT = 2048;
-      const CARD_WIDTH = 215;
-      const CARD_HEIGHT = 300;
-      const CARDS_PER_ROW = 10;
-      const CARDS_PER_COL = 5;
-      const QR_SIZE = 400;
-      const GAP = 48;
-      const HEADER_HEIGHT = 120;
-      const GRID_START_Y = HEADER_HEIGHT + GAP;
+      const PADDING = 40;
+      const HEADER_HEIGHT = 100;
+      const QR_SIZE = 350;
+      const GAP = 10;
+
+      // カードレイアウト計算（8列）
+      const COLS = 8;
+      const CARD_WIDTH = 230;
+      const CARD_HEIGHT = Math.floor(CARD_WIDTH * 1.4);
+      const INFO_HEIGHT = 85;
+      const CARD_TOTAL_HEIGHT = CARD_HEIGHT + INFO_HEIGHT;
 
       const canvas = document.createElement('canvas');
       canvas.width = FINAL_WIDTH;
@@ -276,60 +279,72 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 48px sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText('📋 必要カードリスト', GAP, 75);
+      ctx.fillText('📋 必要カードリスト', PADDING, 65);
 
       // サマリー
-      ctx.font = '32px sans-serif';
-      ctx.fillText(`必要: ${totalWantedCount}枚 / 所持: ${totalOwnedCount}枚 (${wantedCards.length}種類)`, GAP, 110);
+      ctx.font = '28px sans-serif';
+      const totalMissing = wantedCards.reduce((sum, w) => sum + Math.max(0, w.count - w.owned), 0);
+      ctx.fillText(`${wantedCards.length}種類 / 必要: ${totalWantedCount}枚 / 所持: ${totalOwnedCount}枚 / 不足: ${totalMissing}枚`, PADDING, 95);
 
       // QRコード生成
       setGenerateProgress('QRコード生成中...');
       const qrText = exportToText();
-      let qrDataUrl = '';
       if (qrText) {
         const QRCode = (await import('qrcode')).default;
-        qrDataUrl = await QRCode.toDataURL(qrText, {
+        const qrDataUrl = await QRCode.toDataURL(qrText, {
           width: QR_SIZE,
           margin: 2,
           color: { dark: '#000000', light: '#ffffff' },
         });
-      }
 
-      // QRコード描画（右上）
-      if (qrDataUrl) {
+        // QRコード描画（右上）
         const qrImg = await loadImageWithProxy(qrDataUrl);
         if (qrImg) {
-          const qrX = FINAL_WIDTH - QR_SIZE - GAP;
-          const qrY = GAP;
+          const qrX = FINAL_WIDTH - QR_SIZE - PADDING;
+          const qrY = HEADER_HEIGHT + 20;
+          
+          // QR背景
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(qrX - 10, qrY - 10, QR_SIZE + 20, QR_SIZE + 40);
           ctx.drawImage(qrImg, qrX, qrY, QR_SIZE, QR_SIZE);
+          
+          // QRラベル
+          ctx.fillStyle = '#333333';
+          ctx.font = '18px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('インポート用QR', qrX + QR_SIZE / 2, qrY + QR_SIZE + 22);
         }
       }
 
-      // カードを展開（必要数分）
-      const expandedCards: { card: Card; count: number; owned: number; index: number }[] = [];
-      for (const w of wantedCards) {
-        for (let i = 0; i < w.count; i++) {
-          expandedCards.push({ 
-            card: w.card, 
-            count: w.count, 
-            owned: w.owned,
-            index: i 
-          });
-        }
-      }
-
-      // 最大50枚まで描画
-      const cardsToRender = expandedCards.slice(0, CARDS_PER_ROW * CARDS_PER_COL);
+      // カードグリッドの開始位置
+      const gridStartX = PADDING;
+      const gridStartY = HEADER_HEIGHT + 20;
 
       // カード描画
-      for (let i = 0; i < cardsToRender.length; i++) {
-        const { card, owned, index } = cardsToRender[i];
-        const col = i % CARDS_PER_ROW;
-        const row = Math.floor(i / CARDS_PER_ROW);
-        const x = (FINAL_WIDTH - CARDS_PER_ROW * CARD_WIDTH) / 2 + col * CARD_WIDTH;
-        const y = GRID_START_Y + QR_SIZE + GAP + row * CARD_HEIGHT;
+      for (let i = 0; i < wantedCards.length; i++) {
+        const { card, count, owned } = wantedCards[i];
+        const col = i % COLS;
+        const row = Math.floor(i / COLS);
+        
+        const x = gridStartX + col * (CARD_WIDTH + GAP);
+        const y = gridStartY + row * (CARD_TOTAL_HEIGHT + GAP);
 
-        setGenerateProgress(`カード読み込み中... ${i + 1}/${cardsToRender.length}`);
+        // 画面外はスキップ
+        if (y + CARD_TOTAL_HEIGHT > FINAL_HEIGHT - PADDING) continue;
+        // QRと被る場合はスキップ（最初の行の右側2列）
+        if (row === 0 && col >= 6) continue;
+
+        setGenerateProgress(`カード読み込み中... ${i + 1}/${wantedCards.length}`);
+
+        const missing = Math.max(0, count - owned);
+
+        // カード背景（枠）
+        ctx.fillStyle = missing > 0 ? '#fecaca' : '#bbf7d0';
+        ctx.fillRect(x - 3, y - 3, CARD_WIDTH + 6, CARD_TOTAL_HEIGHT + 6);
+
+        // カード画像背景
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x, y, CARD_WIDTH, CARD_HEIGHT);
 
         // カード画像
         if (card.image_url) {
@@ -341,7 +356,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
             ctx.fillStyle = bgColor;
             ctx.fillRect(x, y, CARD_WIDTH, CARD_HEIGHT);
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 18px sans-serif';
+            ctx.font = 'bold 20px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(card.name.slice(0, 6), x + CARD_WIDTH / 2, y + CARD_HEIGHT / 2);
           }
@@ -350,21 +365,59 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
           ctx.fillStyle = bgColor;
           ctx.fillRect(x, y, CARD_WIDTH, CARD_HEIGHT);
           ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 18px sans-serif';
+          ctx.font = 'bold 20px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText(card.name.slice(0, 6), x + CARD_WIDTH / 2, y + CARD_HEIGHT / 2);
         }
 
-        // 所持済みマーク（緑チェック）
-        if (index < owned) {
-          ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+        // 情報エリア背景
+        ctx.fillStyle = missing > 0 ? '#fef2f2' : '#f0fdf4';
+        ctx.fillRect(x, y + CARD_HEIGHT, CARD_WIDTH, INFO_HEIGHT);
+
+        // カード名
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.textAlign = 'left';
+        const displayName = card.name.length > 10 ? card.name.slice(0, 10) + '..' : card.name;
+        ctx.fillText(displayName, x + 8, y + CARD_HEIGHT + 22);
+
+        // カードID
+        ctx.fillStyle = '#64748b';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(card.card_id, x + 8, y + CARD_HEIGHT + 42);
+
+        // 必要/所持
+        ctx.font = 'bold 15px sans-serif';
+        ctx.fillStyle = '#1e293b';
+        ctx.fillText(`必要: ${count}`, x + 8, y + CARD_HEIGHT + 62);
+        ctx.fillStyle = '#16a34a';
+        ctx.fillText(`所持: ${owned}`, x + 8 + 80, y + CARD_HEIGHT + 62);
+        
+        // 不足数表示
+        if (missing > 0) {
+          ctx.fillStyle = '#ef4444';
+          ctx.fillText(`不足: ${missing}`, x + 8, y + CARD_HEIGHT + 80);
+        }
+        
+        // 不足バッジまたは完了マーク
+        if (missing > 0) {
+          ctx.fillStyle = '#ef4444';
           ctx.beginPath();
-          ctx.arc(x + CARD_WIDTH - 25, y + 25, 20, 0, Math.PI * 2);
+          ctx.arc(x + CARD_WIDTH - 22, y + 22, 20, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 24px sans-serif';
+          ctx.font = 'bold 18px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('✓', x + CARD_WIDTH - 25, y + 33);
+          ctx.fillText(`${missing}`, x + CARD_WIDTH - 22, y + 29);
+        } else if (count > 0) {
+          ctx.fillStyle = '#22c55e';
+          ctx.beginPath();
+          ctx.arc(x + CARD_WIDTH - 22, y + 22, 20, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 22px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('✓', x + CARD_WIDTH - 22, y + 30);
         }
       }
 
