@@ -226,29 +226,24 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
     URL.revokeObjectURL(url);
   };
 
-  // 画像生成（デッキ画像と同形式）
+  // 画像生成（カード画像 + 情報エリア）
   const downloadImage = async () => {
     if (wantedCards.length === 0) return;
     setGenerating(true);
 
     try {
-      const cardWidth = 149;
-      const cardHeight = 208;
-      const cols = 10;
-      const gap = 2;
-      const padding = 10;
+      // レイアウト設定
+      const cardWidth = 100;
+      const cardHeight = 140;
+      const infoHeight = 50;
+      const cols = Math.min(6, wantedCards.length);
+      const rows = Math.ceil(wantedCards.length / cols);
+      const padding = 20;
+      const headerHeight = 60;
+      const gap = 8;
 
-      // カードを展開（必要数分だけ繰り返し）
-      const expandedCards: { card: Card; isOwned: boolean }[] = [];
-      for (const w of wantedCards) {
-        for (let i = 0; i < w.count; i++) {
-          expandedCards.push({ card: w.card, isOwned: i < w.owned });
-        }
-      }
-
-      const rows = Math.ceil(expandedCards.length / cols);
       const canvasWidth = padding * 2 + cols * cardWidth + (cols - 1) * gap;
-      const canvasHeight = padding + rows * cardHeight + (rows - 1) * gap + padding;
+      const canvasHeight = padding + headerHeight + rows * (cardHeight + infoHeight) + (rows - 1) * gap + padding;
 
       const canvas = document.createElement('canvas');
       canvas.width = canvasWidth;
@@ -256,10 +251,18 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       const ctx = canvas.getContext('2d')!;
 
       // 背景
-      ctx.fillStyle = '#1a1a2e';
+      ctx.fillStyle = '#f8fafc';
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-      // 画像読み込み関数
+      // ヘッダー
+      ctx.fillStyle = '#fed7aa';
+      ctx.fillRect(0, 0, canvasWidth, headerHeight);
+      ctx.fillStyle = '#c2410c';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('📋 必要カードリスト', canvasWidth / 2, 38);
+
+      // カード画像を読み込んで描画
       const loadImage = (url: string): Promise<HTMLImageElement> => {
         return new Promise((resolve, reject) => {
           const img = new Image();
@@ -270,48 +273,86 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         });
       };
 
-      // カード描画
-      for (let i = 0; i < expandedCards.length; i++) {
-        const { card, isOwned } = expandedCards[i];
+      for (let i = 0; i < wantedCards.length; i++) {
+        const { card, count, owned } = wantedCards[i];
         const col = i % cols;
         const row = Math.floor(i / cols);
         const x = padding + col * (cardWidth + gap);
-        const y = padding + row * (cardHeight + gap);
+        const y = padding + headerHeight + row * (cardHeight + infoHeight + gap);
+        const missing = Math.max(0, count - owned);
+
+        // カード背景
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x, y, cardWidth, cardHeight + infoHeight);
+        ctx.strokeStyle = missing > 0 ? '#ef4444' : '#22c55e';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, cardWidth, cardHeight + infoHeight);
 
         // カード画像
         if (card.image_url) {
           try {
             const img = await loadImage(card.image_url);
-            ctx.drawImage(img, x, y, cardWidth, cardHeight);
+            ctx.drawImage(img, x + 2, y + 2, cardWidth - 4, cardHeight - 4);
           } catch {
-            const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#666') : '#666';
+            // 画像読み込み失敗時はプレースホルダー
+            const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#94a3b8') : '#94a3b8';
             ctx.fillStyle = bgColor;
-            ctx.fillRect(x, y, cardWidth, cardHeight);
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 12px sans-serif';
+            ctx.fillRect(x + 2, y + 2, cardWidth - 4, cardHeight - 4);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 10px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(card.name.slice(0, 8), x + cardWidth / 2, y + cardHeight / 2);
+            ctx.fillText(card.name.slice(0, 6), x + cardWidth / 2, y + cardHeight / 2);
           }
         } else {
-          const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#666') : '#666';
+          // 画像なしカード
+          const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#94a3b8') : '#94a3b8';
           ctx.fillStyle = bgColor;
-          ctx.fillRect(x, y, cardWidth, cardHeight);
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 12px sans-serif';
+          ctx.fillRect(x + 2, y + 2, cardWidth - 4, cardHeight - 4);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(card.name.slice(0, 8), x + cardWidth / 2, y + cardHeight / 2);
+          ctx.fillText(card.name.slice(0, 6), x + cardWidth / 2, y + cardHeight / 2);
         }
 
-        // 所持済みマーク
-        if (isOwned) {
-          ctx.fillStyle = 'rgba(34, 197, 94, 0.8)';
+        // 情報エリア背景
+        ctx.fillStyle = missing > 0 ? '#fef2f2' : '#f0fdf4';
+        ctx.fillRect(x + 1, y + cardHeight, cardWidth - 2, infoHeight - 1);
+
+        // カード名
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'left';
+        const displayName = card.name.length > 8 ? card.name.slice(0, 8) + '..' : card.name;
+        ctx.fillText(displayName, x + 4, y + cardHeight + 12);
+
+        // カードID
+        ctx.fillStyle = '#64748b';
+        ctx.font = '8px sans-serif';
+        ctx.fillText(card.card_id, x + 4, y + cardHeight + 22);
+
+        // 必要/所持
+        ctx.font = 'bold 9px sans-serif';
+        ctx.fillStyle = '#1e293b';
+        ctx.fillText(`必要: ${count}`, x + 4, y + cardHeight + 34);
+        ctx.fillStyle = '#16a34a';
+        ctx.fillText(`所持: ${owned}`, x + 4, y + cardHeight + 44);
+        
+        // 不足バッジ
+        if (missing > 0) {
+          ctx.fillStyle = '#ef4444';
           ctx.beginPath();
-          ctx.arc(x + cardWidth - 18, y + 18, 14, 0, Math.PI * 2);
+          ctx.arc(x + cardWidth - 14, y + 14, 12, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 16px sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 11px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('✓', x + cardWidth - 18, y + 23);
+          ctx.fillText(`${missing}`, x + cardWidth - 14, y + 18);
+        } else if (count > 0) {
+          // 揃った
+          ctx.fillStyle = '#22c55e';
+          ctx.font = 'bold 14px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('✓', x + cardWidth - 14, y + 18);
         }
       }
 
@@ -540,12 +581,10 @@ function WantedQRModal({
   allCards: Card[];
   onClose: () => void;
 }) {
-  const [scanning, setScanning] = useState(false);
-  const [scannedText, setScannedText] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
+  const [scannedText, setScannedText] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { importFromText } = useWantedCards();
 
   // QRコード生成
@@ -559,68 +598,51 @@ function WantedQRModal({
     }
   }, [mode, qrText]);
 
-  // QRスキャン開始
-  const startScanning = async () => {
-    setScanning(true);
+  // 画像からQRコード読み取り
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setProcessing(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        scanQR();
-      }
-    } catch (error) {
-      console.error('Camera error:', error);
-      alert('カメラを起動できませんでした');
-      setScanning(false);
-    }
-  };
-
-  // QRスキャン処理
-  const scanQR = async () => {
-    const jsQR = (await import('jsqr')).default;
-    
-    const scan = () => {
-      if (!videoRef.current || !canvasRef.current) return;
+      const jsQR = (await import('jsqr')).default;
       
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) {
-        animationRef.current = requestAnimationFrame(scan);
-        return;
-      }
+      // 画像を読み込み
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = url;
+      });
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
+      // Canvasに描画
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
 
+      // QRコード読み取り
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
 
+      URL.revokeObjectURL(url);
+
       if (code) {
         setScannedText(code.data);
-        stopScanning();
-        return;
+      } else {
+        alert('QRコードを検出できませんでした');
       }
-
-      animationRef.current = requestAnimationFrame(scan);
-    };
-
-    animationRef.current = requestAnimationFrame(scan);
-  };
-
-  // スキャン停止
-  const stopScanning = () => {
-    setScanning(false);
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
+    } catch (error) {
+      console.error('QR scan error:', error);
+      alert('画像の読み取りに失敗しました');
+    } finally {
+      setProcessing(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -632,13 +654,6 @@ function WantedQRModal({
     onClose();
   };
 
-  // クリーンアップ
-  useEffect(() => {
-    return () => {
-      stopScanning();
-    };
-  }, []);
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 z-[100] flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
@@ -646,7 +661,7 @@ function WantedQRModal({
           <h3 className="font-bold">
             {mode === 'export' ? '📱 QRコード出力' : '📷 QRコード読込'}
           </h3>
-          <button onClick={() => { stopScanning(); onClose(); }} className="text-xl">×</button>
+          <button onClick={onClose} className="text-xl">×</button>
         </div>
         
         <div className="p-4">
@@ -663,18 +678,15 @@ function WantedQRModal({
             </div>
           ) : (
             <div>
-              {scanning ? (
-                <div>
-                  <video ref={videoRef} className="w-full rounded" />
-                  <canvas ref={canvasRef} className="hidden" />
-                  <button 
-                    onClick={stopScanning}
-                    className="w-full mt-2 py-2 bg-red-500 text-white rounded"
-                  >
-                    スキャン停止
-                  </button>
-                </div>
-              ) : scannedText ? (
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              
+              {scannedText ? (
                 <div>
                   <div className="p-2 bg-green-50 rounded mb-2">
                     <p className="text-sm text-green-700">✓ QRコードを読み取りました</p>
@@ -682,23 +694,32 @@ function WantedQRModal({
                       {scannedText.split('\n').filter(l => l.trim()).length}件のカード情報
                     </p>
                   </div>
-                  <button 
-                    onClick={handleImport}
-                    className="w-full py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                  >
-                    インポート実行
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setScannedText('')}
+                      className="flex-1 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                    >
+                      別の画像
+                    </button>
+                    <button 
+                      onClick={handleImport}
+                      className="flex-1 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      インポート
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center">
                   <button 
-                    onClick={startScanning}
-                    className="w-full py-3 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={processing}
+                    className="w-full py-3 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
                   >
-                    📷 カメラでスキャン開始
+                    {processing ? '読み取り中...' : '🖼️ 画像を選択'}
                   </button>
                   <p className="text-sm text-gray-500 mt-2">
-                    必要カードリストのQRコードをスキャンします
+                    QRコードの画像を選択してください
                   </p>
                 </div>
               )}
@@ -708,7 +729,7 @@ function WantedQRModal({
         
         <div className="p-4 border-t">
           <button 
-            onClick={() => { stopScanning(); onClose(); }}
+            onClick={onClose}
             className="w-full py-2 bg-gray-200 rounded hover:bg-gray-300"
           >
             閉じる

@@ -1138,7 +1138,9 @@ export default function MultiDeckMode() {
                   <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                     <label className="block text-sm font-medium text-gray-700 mb-2">表示列数</label>
                     <select value={colsCount} onChange={(e) => setColsCount(Number(e.target.value))} className="w-full border rounded px-3 py-2">
-                      {[3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n}>{n}列{n >= 5 ? '（コンパクト）' : ''}</option>)}
+                      {Array.from({ length: 15 }, (_, i) => i + 1).map(n => (
+                        <option key={n} value={n}>{n}列{n >= 5 ? '（コンパクト）' : ''}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="mt-4">

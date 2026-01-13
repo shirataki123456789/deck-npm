@@ -149,12 +149,9 @@ export default function SearchMode() {
               onChange={(e) => setColsCount(Number(e.target.value))}
               className="w-full border rounded px-3 py-2"
             >
-              <option value={3}>3列</option>
-              <option value={4}>4列</option>
-              <option value={5}>5列（コンパクト）</option>
-              <option value={6}>6列（コンパクト）</option>
-              <option value={7}>7列（コンパクト）</option>
-              <option value={8}>8列（コンパクト）</option>
+              {Array.from({ length: 15 }, (_, i) => i + 1).map(n => (
+                <option key={n} value={n}>{n}列{n >= 5 ? '（コンパクト）' : ''}</option>
+              ))}
             </select>
             <p className="text-xs text-gray-500 mt-1">
               5列以上は画像のみ表示

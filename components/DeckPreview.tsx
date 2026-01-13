@@ -587,13 +587,9 @@ export default function DeckPreview({
               onChange={(e) => setColsCount(Number(e.target.value))}
               className="border rounded px-2 py-1 text-sm"
             >
-              <option value={3}>3列</option>
-              <option value={4}>4列</option>
-              <option value={5}>5列</option>
-              <option value={6}>6列</option>
-              <option value={7}>7列</option>
-              <option value={8}>8列</option>
-              <option value={10}>10列</option>
+              {Array.from({ length: 15 }, (_, i) => i + 1).map(n => (
+                <option key={n} value={n}>{n}列</option>
+              ))}
             </select>
           </div>
         </div>
