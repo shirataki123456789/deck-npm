@@ -177,6 +177,33 @@ const COLOR_RGB: Record<string, string> = {
   '黄': '#eab308',
 };
 
+// 画像読み込み関数（プロキシ対応）
+async function loadImageWithProxy(url: string): Promise<HTMLImageElement | null> {
+  const loadImage = (src: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  };
+
+  try {
+    // 直接ロードを試みる
+    return await loadImage(url);
+  } catch {
+    // CORSエラーの場合はプロキシを使用
+    try {
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+      return await loadImage(proxyUrl);
+    } catch {
+      console.error('Failed to load image:', url);
+      return null;
+    }
+  }
+}
+
 // 必要リストパネルコンポーネント
 export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
   const { 
@@ -192,6 +219,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
   } = useWantedCards();
   
   const [generating, setGenerating] = useState(false);
+  const [generateProgress, setGenerateProgress] = useState('');
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrMode, setQrMode] = useState<'export' | 'import'>('export');
   const [showImportModal, setShowImportModal] = useState(false);
@@ -226,24 +254,25 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
     URL.revokeObjectURL(url);
   };
 
-  // 画像生成（カード画像 + 情報エリア）
+  // 画像生成（デッキ画像と同じサイズ）
   const downloadImage = async () => {
     if (wantedCards.length === 0) return;
     setGenerating(true);
+    setGenerateProgress('準備中...');
 
     try {
-      // レイアウト設定
-      const cardWidth = 100;
-      const cardHeight = 140;
-      const infoHeight = 50;
-      const cols = Math.min(6, wantedCards.length);
-      const rows = Math.ceil(wantedCards.length / cols);
-      const padding = 20;
-      const headerHeight = 60;
-      const gap = 8;
+      // デッキ画像と同じサイズ設定
+      const CARD_WIDTH = 149;
+      const CARD_HEIGHT = 208;
+      const INFO_HEIGHT = 60;
+      const COLS = 6;
+      const GAP = 4;
+      const PADDING = 20;
+      const HEADER_HEIGHT = 60;
 
-      const canvasWidth = padding * 2 + cols * cardWidth + (cols - 1) * gap;
-      const canvasHeight = padding + headerHeight + rows * (cardHeight + infoHeight) + (rows - 1) * gap + padding;
+      const rows = Math.ceil(wantedCards.length / COLS);
+      const canvasWidth = PADDING * 2 + COLS * CARD_WIDTH + (COLS - 1) * GAP;
+      const canvasHeight = PADDING + HEADER_HEIGHT + rows * (CARD_HEIGHT + INFO_HEIGHT) + (rows - 1) * GAP + PADDING;
 
       const canvas = document.createElement('canvas');
       canvas.width = canvasWidth;
@@ -251,110 +280,104 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       const ctx = canvas.getContext('2d')!;
 
       // 背景
-      ctx.fillStyle = '#f8fafc';
+      ctx.fillStyle = '#1a1a2e';
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
       // ヘッダー
       ctx.fillStyle = '#fed7aa';
-      ctx.fillRect(0, 0, canvasWidth, headerHeight);
+      ctx.fillRect(0, 0, canvasWidth, HEADER_HEIGHT);
       ctx.fillStyle = '#c2410c';
-      ctx.font = 'bold 22px sans-serif';
+      ctx.font = 'bold 24px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('📋 必要カードリスト', canvasWidth / 2, 38);
+      ctx.fillText('📋 必要カードリスト', canvasWidth / 2, 40);
 
-      // カード画像を読み込んで描画
-      const loadImage = (url: string): Promise<HTMLImageElement> => {
-        return new Promise((resolve, reject) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => resolve(img);
-          img.onerror = reject;
-          img.src = url;
-        });
-      };
-
+      // カード描画
       for (let i = 0; i < wantedCards.length; i++) {
         const { card, count, owned } = wantedCards[i];
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = padding + col * (cardWidth + gap);
-        const y = padding + headerHeight + row * (cardHeight + infoHeight + gap);
+        const col = i % COLS;
+        const row = Math.floor(i / COLS);
+        const x = PADDING + col * (CARD_WIDTH + GAP);
+        const y = PADDING + HEADER_HEIGHT + row * (CARD_HEIGHT + INFO_HEIGHT + GAP);
         const missing = Math.max(0, count - owned);
 
-        // カード背景
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x, y, cardWidth, cardHeight + infoHeight);
-        ctx.strokeStyle = missing > 0 ? '#ef4444' : '#22c55e';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, cardWidth, cardHeight + infoHeight);
+        setGenerateProgress(`カード読み込み中... ${i + 1}/${wantedCards.length}`);
+
+        // カード背景（枠）
+        ctx.fillStyle = missing > 0 ? '#fecaca' : '#bbf7d0';
+        ctx.fillRect(x - 2, y - 2, CARD_WIDTH + 4, CARD_HEIGHT + INFO_HEIGHT + 4);
 
         // カード画像
         if (card.image_url) {
-          try {
-            const img = await loadImage(card.image_url);
-            ctx.drawImage(img, x + 2, y + 2, cardWidth - 4, cardHeight - 4);
-          } catch {
+          const img = await loadImageWithProxy(card.image_url);
+          if (img) {
+            ctx.drawImage(img, x, y, CARD_WIDTH, CARD_HEIGHT);
+          } else {
             // 画像読み込み失敗時はプレースホルダー
             const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#94a3b8') : '#94a3b8';
             ctx.fillStyle = bgColor;
-            ctx.fillRect(x + 2, y + 2, cardWidth - 4, cardHeight - 4);
+            ctx.fillRect(x, y, CARD_WIDTH, CARD_HEIGHT);
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 10px sans-serif';
+            ctx.font = 'bold 14px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(card.name.slice(0, 6), x + cardWidth / 2, y + cardHeight / 2);
+            ctx.fillText(card.name.slice(0, 8), x + CARD_WIDTH / 2, y + CARD_HEIGHT / 2);
           }
         } else {
           // 画像なしカード
           const bgColor = card.color.length > 0 ? (COLOR_RGB[card.color[0]] || '#94a3b8') : '#94a3b8';
           ctx.fillStyle = bgColor;
-          ctx.fillRect(x + 2, y + 2, cardWidth - 4, cardHeight - 4);
+          ctx.fillRect(x, y, CARD_WIDTH, CARD_HEIGHT);
           ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 10px sans-serif';
+          ctx.font = 'bold 14px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(card.name.slice(0, 6), x + cardWidth / 2, y + cardHeight / 2);
+          ctx.fillText(card.name.slice(0, 8), x + CARD_WIDTH / 2, y + CARD_HEIGHT / 2);
         }
 
         // 情報エリア背景
         ctx.fillStyle = missing > 0 ? '#fef2f2' : '#f0fdf4';
-        ctx.fillRect(x + 1, y + cardHeight, cardWidth - 2, infoHeight - 1);
+        ctx.fillRect(x, y + CARD_HEIGHT, CARD_WIDTH, INFO_HEIGHT);
 
         // カード名
         ctx.fillStyle = '#1e293b';
-        ctx.font = 'bold 9px sans-serif';
+        ctx.font = 'bold 11px sans-serif';
         ctx.textAlign = 'left';
-        const displayName = card.name.length > 8 ? card.name.slice(0, 8) + '..' : card.name;
-        ctx.fillText(displayName, x + 4, y + cardHeight + 12);
+        const displayName = card.name.length > 10 ? card.name.slice(0, 10) + '..' : card.name;
+        ctx.fillText(displayName, x + 4, y + CARD_HEIGHT + 14);
 
         // カードID
         ctx.fillStyle = '#64748b';
-        ctx.font = '8px sans-serif';
-        ctx.fillText(card.card_id, x + 4, y + cardHeight + 22);
+        ctx.font = '10px sans-serif';
+        ctx.fillText(card.card_id, x + 4, y + CARD_HEIGHT + 26);
 
         // 必要/所持
-        ctx.font = 'bold 9px sans-serif';
+        ctx.font = 'bold 11px sans-serif';
         ctx.fillStyle = '#1e293b';
-        ctx.fillText(`必要: ${count}`, x + 4, y + cardHeight + 34);
+        ctx.fillText(`必要: ${count}`, x + 4, y + CARD_HEIGHT + 40);
         ctx.fillStyle = '#16a34a';
-        ctx.fillText(`所持: ${owned}`, x + 4, y + cardHeight + 44);
+        ctx.fillText(`所持: ${owned}`, x + 4, y + CARD_HEIGHT + 52);
         
-        // 不足バッジ
+        // 不足バッジまたは完了マーク
         if (missing > 0) {
           ctx.fillStyle = '#ef4444';
           ctx.beginPath();
-          ctx.arc(x + cardWidth - 14, y + 14, 12, 0, Math.PI * 2);
+          ctx.arc(x + CARD_WIDTH - 16, y + 16, 14, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 11px sans-serif';
+          ctx.font = 'bold 12px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(`${missing}`, x + cardWidth - 14, y + 18);
+          ctx.fillText(`${missing}`, x + CARD_WIDTH - 16, y + 21);
         } else if (count > 0) {
-          // 揃った
           ctx.fillStyle = '#22c55e';
-          ctx.font = 'bold 14px sans-serif';
+          ctx.beginPath();
+          ctx.arc(x + CARD_WIDTH - 16, y + 16, 14, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 16px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('✓', x + cardWidth - 14, y + 18);
+          ctx.fillText('✓', x + CARD_WIDTH - 16, y + 22);
         }
       }
+
+      setGenerateProgress('画像を生成中...');
 
       // ダウンロード
       const dataUrl = canvas.toDataURL('image/png');
@@ -367,6 +390,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       alert('画像生成に失敗しました');
     } finally {
       setGenerating(false);
+      setGenerateProgress('');
     }
   };
 
@@ -480,7 +504,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
               disabled={wantedCards.length === 0 || generating}
               className="flex-1 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
-              {generating ? '生成中...' : '🖼️ 画像'}
+              {generating ? generateProgress || '生成中...' : '🖼️ 画像'}
             </button>
             <button
               onClick={() => { setQrMode('export'); setShowQRModal(true); }}

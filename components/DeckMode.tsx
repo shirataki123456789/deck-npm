@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, Deck, FilterOptions, DEFAULT_FILTER_OPTIONS, UNLIMITED_CARDS, COLOR_ORDER } from '@/lib/types';
 import FilterPanel from './FilterPanel';
 import CardGrid from './CardGrid';
@@ -9,6 +9,7 @@ import DeckPreview from './DeckPreview';
 import LeaderSelect from './LeaderSelect';
 import BlankCardModal from './BlankCardModal';
 import CsvEditorMode from './CsvEditorMode';
+import { useWantedCards } from './WantedCardsContext';
 
 type DeckView = 'leader' | 'preview' | 'add_cards';
 
@@ -51,6 +52,17 @@ export default function DeckMode() {
   const [loading, setLoading] = useState(false);
   const [colsCount, setColsCount] = useState(4);
   const [showBlankCardModal, setShowBlankCardModal] = useState(false);
+  const [wantedOnly, setWantedOnly] = useState(false);
+  
+  // 必要カードリスト
+  const { updateWantedCount, updateOwnedCount, getWantedCount, getOwnedCount, getWantedCardIds } = useWantedCards();
+  
+  // 必要リストフィルター適用
+  const displayCards = useMemo(() => {
+    if (!wantedOnly) return filteredCards;
+    const wantedIds = getWantedCardIds();
+    return filteredCards.filter(c => wantedIds.includes(c.card_id));
+  }, [filteredCards, wantedOnly, getWantedCardIds]);
   
   // ブランクカードインポートイベントのリスナー
   useEffect(() => {
@@ -504,6 +516,10 @@ export default function DeckMode() {
               setAllCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
               setLeaderCard(card);
             }}
+            onUpdateWantedCount={updateWantedCount}
+            onUpdateOwnedCount={updateOwnedCount}
+            getWantedCount={getWantedCount}
+            getOwnedCount={getOwnedCount}
           />
         )}
         
@@ -573,6 +589,21 @@ export default function DeckMode() {
                   />
                 )}
                 
+                {/* 必要リストフィルター */}
+                <div className="mt-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={wantedOnly}
+                      onChange={(e) => setWantedOnly(e.target.checked)}
+                      className="w-4 h-4 rounded text-orange-500"
+                    />
+                    <span className="text-sm font-medium text-orange-700">
+                      📋 必要リストのカードのみ表示
+                    </span>
+                  </label>
+                </div>
+                
                 {/* 表示設定 */}
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -617,7 +648,10 @@ export default function DeckMode() {
             <div className="flex-1">
               <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <h2 className="text-lg font-bold">➕ カードを追加</h2>
+                  <h2 className="text-lg font-bold">
+                    ➕ カードを追加
+                    {wantedOnly && <span className="ml-2 text-sm text-orange-600">（必要リストのみ）</span>}
+                  </h2>
                   <p className="text-sm text-gray-600">
                     リーダー: {leaderCard.name}（{leaderCard.color.join('/')}）
                     - リーダーの色と同じカードのみが表示されます
@@ -634,7 +668,7 @@ export default function DeckMode() {
               {/* カード一覧 */}
               <div className="mb-4 flex items-center justify-between">
                 <p className="text-sm text-gray-600">
-                  表示中のカード: {filteredCards.length} 枚
+                  表示中のカード: {displayCards.length} 枚
                 </p>
                 <button
                   onClick={() => setFilterSidebarOpen(true)}
@@ -650,7 +684,7 @@ export default function DeckMode() {
                 </div>
               ) : (
                 <CardGrid
-                  cards={filteredCards}
+                  cards={displayCards}
                   colsCount={colsCount}
                   onCardClick={handleAddCard}
                   onCardRemove={(card) => handleRemoveCard(card.card_id)}
@@ -658,6 +692,10 @@ export default function DeckMode() {
                   showAddButton={true}
                   getCardCount={(cardId) => deck.cards[cardId] || 0}
                   canAddCard={canAddCard}
+                  onUpdateWantedCount={updateWantedCount}
+                  onUpdateOwnedCount={updateOwnedCount}
+                  getWantedCount={getWantedCount}
+                  getOwnedCount={getOwnedCount}
                 />
               )}
             </div>
