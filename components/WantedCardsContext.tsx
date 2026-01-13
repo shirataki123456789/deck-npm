@@ -1,7 +1,52 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect } from 'react';
-import { Card } from '@/lib/types';
+import { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect, useMemo } from 'react';
+import { Card, COLOR_ORDER, COLOR_PRIORITY, TYPE_PRIORITY } from '@/lib/types';
+
+// カードのソートキーを計算
+function computeSortKey(card: Card) {
+  let basePriority = 999;
+  let subPriority = 0;
+  let multiFlag = 0;
+  
+  if (card.color.length > 0) {
+    for (const color of COLOR_ORDER) {
+      if (card.color.includes(color)) {
+        basePriority = COLOR_PRIORITY[color];
+        break;
+      }
+    }
+    
+    if (card.color.length > 1) {
+      multiFlag = 1;
+      for (const color of COLOR_ORDER) {
+        if (card.color.includes(color) && COLOR_PRIORITY[color] !== basePriority) {
+          subPriority = COLOR_PRIORITY[color] + 1;
+          break;
+        }
+      }
+    }
+  }
+  
+  const typeRank = TYPE_PRIORITY[card.type] ?? 9;
+  
+  return { basePriority, typeRank, subPriority, multiFlag };
+}
+
+// カードをソート
+function sortCards(cards: Card[]): Card[] {
+  return [...cards].sort((a, b) => {
+    const keyA = computeSortKey(a);
+    const keyB = computeSortKey(b);
+    
+    if (keyA.basePriority !== keyB.basePriority) return keyA.basePriority - keyB.basePriority;
+    if (keyA.typeRank !== keyB.typeRank) return keyA.typeRank - keyB.typeRank;
+    if (keyA.subPriority !== keyB.subPriority) return keyA.subPriority - keyB.subPriority;
+    if (keyA.multiFlag !== keyB.multiFlag) return keyA.multiFlag - keyB.multiFlag;
+    if (a.cost !== b.cost) return a.cost - b.cost;
+    return a.name.localeCompare(b.name, 'ja');
+  });
+}
 
 interface WantedCard {
   card: Card;
@@ -11,6 +56,7 @@ interface WantedCard {
 
 interface WantedCardsContextType {
   wantedCards: WantedCard[];
+  sortedWantedCards: WantedCard[];
   addWantedCard: (card: Card, count?: number) => void;
   removeWantedCard: (cardId: string) => void;
   updateWantedCount: (card: Card, count: number) => void;
@@ -29,6 +75,13 @@ const WantedCardsContext = createContext<WantedCardsContextType | null>(null);
 
 export function WantedCardsProvider({ children }: { children: ReactNode }) {
   const [wantedCards, setWantedCards] = useState<WantedCard[]>([]);
+
+  // ソート済みリスト
+  const sortedWantedCards = useMemo(() => {
+    const cards = wantedCards.map(w => w.card);
+    const sorted = sortCards(cards);
+    return sorted.map(card => wantedCards.find(w => w.card.card_id === card.card_id)!);
+  }, [wantedCards]);
 
   const addWantedCard = useCallback((card: Card, count: number = 1) => {
     setWantedCards(prev => {
@@ -141,6 +194,7 @@ export function WantedCardsProvider({ children }: { children: ReactNode }) {
   return (
     <WantedCardsContext.Provider value={{
       wantedCards,
+      sortedWantedCards,
       addWantedCard,
       removeWantedCard,
       updateWantedCount,
@@ -205,7 +259,8 @@ async function loadImageWithProxy(url: string): Promise<HTMLImageElement | null>
 // 必要リストパネルコンポーネント
 export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
   const { 
-    wantedCards, 
+    wantedCards,
+    sortedWantedCards, 
     updateWantedCount, 
     updateOwnedCount,
     removeWantedCard, 
@@ -237,19 +292,19 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       .catch(console.error);
   }, []);
 
-  // 画像生成（2150x可変高さ、QR付き、カードまとめ表示）
+  // 画像生成（2150x2048、QR付き、カードまとめ表示）
   const downloadImage = async () => {
-    if (wantedCards.length === 0) return;
+    if (sortedWantedCards.length === 0) return;
     setGenerating(true);
     setGenerateProgress('準備中...');
 
     try {
       // 画像サイズ
       const FINAL_WIDTH = 2150;
-      const MIN_HEIGHT = 2048;
+      const FINAL_HEIGHT = 2048;
       const PADDING = 40;
       const HEADER_HEIGHT = 100;
-      const QR_SIZE = 350;
+      const QR_SIZE = 300;
       const GAP = 10;
 
       // カードレイアウト計算（8列）
@@ -259,11 +314,12 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       const INFO_HEIGHT = 85;
       const CARD_TOTAL_HEIGHT = CARD_HEIGHT + INFO_HEIGHT;
 
-      // 必要な行数を計算
-      const rows = Math.ceil(wantedCards.length / COLS);
-      const gridHeight = rows * (CARD_TOTAL_HEIGHT + GAP);
-      const contentHeight = HEADER_HEIGHT + 20 + Math.max(QR_SIZE + 50, gridHeight) + PADDING;
-      const FINAL_HEIGHT = Math.max(MIN_HEIGHT, contentHeight);
+      // QRエリアの高さ
+      const QR_AREA_HEIGHT = QR_SIZE + 60;
+      
+      // カードグリッドの開始位置（QRの下から）
+      const gridStartX = PADDING;
+      const gridStartY = HEADER_HEIGHT + QR_AREA_HEIGHT + 20;
 
       const canvas = document.createElement('canvas');
       canvas.width = FINAL_WIDTH;
@@ -289,8 +345,8 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
 
       // サマリー
       ctx.font = '28px sans-serif';
-      const totalMissing = wantedCards.reduce((sum, w) => sum + Math.max(0, w.count - w.owned), 0);
-      ctx.fillText(`${wantedCards.length}種類 / 必要: ${totalWantedCount}枚 / 所持: ${totalOwnedCount}枚 / 不足: ${totalMissing}枚`, PADDING, 95);
+      const totalMissing = sortedWantedCards.reduce((sum, w) => sum + Math.max(0, w.count - w.owned), 0);
+      ctx.fillText(`${sortedWantedCards.length}種類 / 必要: ${totalWantedCount}枚 / 所持: ${totalOwnedCount}枚 / 不足: ${totalMissing}枚`, PADDING, 95);
 
       // QRコード生成
       setGenerateProgress('QRコード生成中...');
@@ -303,7 +359,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
           color: { dark: '#000000', light: '#ffffff' },
         });
 
-        // QRコード描画（右上）
+        // QRコード描画（右上、ヘッダー下）
         const qrImg = await loadImageWithProxy(qrDataUrl);
         if (qrImg) {
           const qrX = FINAL_WIDTH - QR_SIZE - PADDING;
@@ -322,23 +378,19 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         }
       }
 
-      // カードグリッドの開始位置
-      const gridStartX = PADDING;
-      const gridStartY = HEADER_HEIGHT + 20;
-
-      // カード描画
-      for (let i = 0; i < wantedCards.length; i++) {
-        const { card, count, owned } = wantedCards[i];
+      // カード描画（QRの下から開始）
+      for (let i = 0; i < sortedWantedCards.length; i++) {
+        const { card, count, owned } = sortedWantedCards[i];
         const col = i % COLS;
         const row = Math.floor(i / COLS);
         
         const x = gridStartX + col * (CARD_WIDTH + GAP);
         const y = gridStartY + row * (CARD_TOTAL_HEIGHT + GAP);
 
-        // QRと被る場合はスキップ（最初の行の右側2列）
-        if (row === 0 && col >= 6) continue;
+        // 画面外はスキップ
+        if (y + CARD_TOTAL_HEIGHT > FINAL_HEIGHT - PADDING) continue;
 
-        setGenerateProgress(`カード読み込み中... ${i + 1}/${wantedCards.length}`);
+        setGenerateProgress(`カード読み込み中... ${i + 1}/${sortedWantedCards.length}`);
 
         const missing = Math.max(0, count - owned);
 
@@ -456,7 +508,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         </div>
         
         <div className="flex-1 overflow-y-auto p-4">
-          {wantedCards.length === 0 ? (
+          {sortedWantedCards.length === 0 ? (
             <div className="text-center text-gray-500 py-8">
               <div className="text-4xl mb-2">📝</div>
               <p>必要なカードがありません</p>
@@ -464,7 +516,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
             </div>
           ) : (
             <div className="space-y-2">
-              {wantedCards.map(w => (
+              {sortedWantedCards.map(w => (
                 <div 
                   key={w.card.card_id} 
                   className="flex items-center gap-2 p-2 bg-gray-50 rounded"
@@ -541,7 +593,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
           <div className="flex gap-2">
             <button
               onClick={downloadImage}
-              disabled={wantedCards.length === 0 || generating}
+              disabled={sortedWantedCards.length === 0 || generating}
               className="flex-1 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               {generating ? generateProgress || '生成中...' : '🖼️ 画像'}
@@ -554,7 +606,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
             </button>
             <button
               onClick={clearWantedCards}
-              disabled={wantedCards.length === 0}
+              disabled={sortedWantedCards.length === 0}
               className="flex-1 py-2 bg-red-100 text-red-600 rounded hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               🗑️ クリア
