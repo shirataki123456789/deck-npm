@@ -18,7 +18,7 @@ interface ImageModalProps {
   getWantedCount?: (cardId: string) => number;
   getOwnedCount?: (cardId: string) => number;
   // ブックマーク用
-  isBookmarked?: boolean;
+  isBookmarked?: (cardId: string) => boolean;
   onToggleBookmark?: (cardId: string) => void;
 }
 
@@ -91,7 +91,7 @@ export default function ImageModal({
   onNavigate,
   getWantedCount,
   getOwnedCount,
-  isBookmarked = false,
+  isBookmarked,
   onToggleBookmark,
 }: ImageModalProps) {
   // スワイプ用
@@ -103,6 +103,7 @@ export default function ImageModal({
   const displayCard = cards && currentIndex !== undefined ? cards[currentIndex] : card;
   const displayWantedCount = displayCard && getWantedCount ? getWantedCount(displayCard.card_id) : wantedCount;
   const displayOwnedCount = displayCard && getOwnedCount ? getOwnedCount(displayCard.card_id) : ownedCount;
+  const displayIsBookmarked = displayCard && isBookmarked ? isBookmarked(displayCard.card_id) : false;
   
   const canGoPrev = cards && currentIndex !== undefined && currentIndex > 0;
   const canGoNext = cards && currentIndex !== undefined && currentIndex < cards.length - 1;
@@ -271,13 +272,13 @@ export default function ImageModal({
                 <button
                   onClick={() => onToggleBookmark(displayCard.card_id)}
                   className={`p-2 rounded-lg text-xl transition-colors flex-shrink-0 ${
-                    isBookmarked
+                    displayIsBookmarked
                       ? 'bg-yellow-100 text-yellow-500'
                       : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
                   }`}
-                  title={isBookmarked ? 'ブックマーク解除' : 'ブックマーク'}
+                  title={displayIsBookmarked ? 'ブックマーク解除' : 'ブックマーク'}
                 >
-                  {isBookmarked ? '★' : '☆'}
+                  {displayIsBookmarked ? '★' : '☆'}
                 </button>
               )}
               <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">

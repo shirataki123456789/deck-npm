@@ -91,7 +91,7 @@ export default function CardGrid({
         onNavigate={handleNavigate}
         getWantedCount={getWantedCount}
         getOwnedCount={getOwnedCount}
-        isBookmarked={zoomedIndex !== null && isBookmarked ? isBookmarked(cards[zoomedIndex].card_id) : false}
+        isBookmarked={isBookmarked}
         onToggleBookmark={onToggleBookmark}
       />
     </>
