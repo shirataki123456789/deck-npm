@@ -136,37 +136,51 @@ export default function MultiDeckMode() {
     saveTabsToStorage(tabs);
   }, [tabs]);
 
-  // 単独デッキモードからのデッキ追加イベントをリッスン
+  // 単独デッキモードからのデッキ追加をチェック（マウント時とフォーカス時）
   useEffect(() => {
-    const handleAddToMultiDeck = (e: CustomEvent<{ deck: Deck; leaderCard: Card; blankCards: Card[] }>) => {
-      const { deck, leaderCard, blankCards } = e.detail;
-      
-      // 新しいタブを作成
-      const newTab: DeckTab = {
-        id: generateTabId(),
-        name: deck.name || `${leaderCard.name}デッキ`,
-        deck,
-        leaderCard,
-        view: 'preview',
-        blankCards,
-        tags: [],
-      };
-      
-      setTabs(prev => [...prev, newTab]);
-      setActiveTabId(newTab.id);
-      
-      // ブランクカードをallCardsに追加
-      if (blankCards.length > 0) {
-        setAllCards(prev => {
-          const existingIds = new Set(prev.map(c => c.card_id));
-          const newCards = blankCards.filter(c => !existingIds.has(c.card_id));
-          return [...prev, ...newCards];
-        });
+    const checkPendingDeck = () => {
+      try {
+        const pendingData = sessionStorage.getItem('pendingMultiDeckAdd');
+        if (!pendingData) return;
+        
+        const { deck, leaderCard, blankCards } = JSON.parse(pendingData);
+        
+        // 新しいタブを作成
+        const newTab: DeckTab = {
+          id: generateTabId(),
+          name: deck.name || `${leaderCard.name}デッキ`,
+          deck,
+          leaderCard,
+          view: 'preview',
+          blankCards: blankCards || [],
+          tags: [],
+        };
+        
+        setTabs(prev => [...prev, newTab]);
+        setActiveTabId(newTab.id);
+        
+        // ブランクカードをallCardsに追加
+        if (blankCards && blankCards.length > 0) {
+          setAllCards(prev => {
+            const existingIds = new Set(prev.map(c => c.card_id));
+            const newCards = blankCards.filter((c: Card) => !existingIds.has(c.card_id));
+            return [...prev, ...newCards];
+          });
+        }
+        
+        // 処理済みなので削除
+        sessionStorage.removeItem('pendingMultiDeckAdd');
+      } catch (e) {
+        console.error('Failed to load pending deck:', e);
       }
     };
     
-    window.addEventListener('addToMultiDeck', handleAddToMultiDeck as EventListener);
-    return () => window.removeEventListener('addToMultiDeck', handleAddToMultiDeck as EventListener);
+    // 初回チェック
+    checkPendingDeck();
+    
+    // フォーカス時にもチェック
+    window.addEventListener('focus', checkPendingDeck);
+    return () => window.removeEventListener('focus', checkPendingDeck);
   }, []);
 
   // アクティブなタブ

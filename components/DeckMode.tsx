@@ -412,19 +412,21 @@ export default function DeckMode() {
       return;
     }
     
-    // カスタムイベントを発火してMultiDeckModeに通知
-    const event = new CustomEvent('addToMultiDeck', { 
-      detail: { 
-        deck: { ...deck, name: deck.name || `${leaderCard.name}デッキ` },
-        leaderCard,
-        blankCards: blankCards.filter(c => 
-          deck.cards[c.card_id] || c.card_id === deck.leader
-        ),
-      }
-    });
-    window.dispatchEvent(event);
+    // sessionStorageに保存してMultiDeckModeに渡す
+    const deckData = {
+      deck: { ...deck, name: deck.name || `${leaderCard.name}デッキ` },
+      leaderCard,
+      blankCards: blankCards.filter(c => 
+        deck.cards[c.card_id] || c.card_id === deck.leader
+      ),
+      timestamp: Date.now(),
+    };
+    sessionStorage.setItem('pendingMultiDeckAdd', JSON.stringify(deckData));
     
-    alert('マルチデッキに追加しました！\n「デッキ一覧」タブで確認できます。');
+    // カスタムイベントでモード切り替えを通知
+    window.dispatchEvent(new CustomEvent('switchToMultiDeck'));
+    
+    alert('マルチデッキに追加しました！\n「マルチデッキ」タブに移動します。');
   };
   
   // デッキインポート（ブランクカードの枚数情報も含む）
