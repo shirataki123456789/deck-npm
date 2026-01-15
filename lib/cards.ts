@@ -322,6 +322,13 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
     result = result.filter(c => !c.trigger || c.trigger.trim() === '' || c.trigger === '-');
   }
   
+  // 13) レアリティフィルタ
+  if (options.rarities && options.rarities.length > 0) {
+    result = result.filter(c =>
+      options.rarities.includes(c.rarity)
+    );
+  }
+  
   // ソートして返す
   return sortCards(result);
 }
@@ -339,6 +346,12 @@ export function getUniqueValues(cards: Card[]) {
   const blocks = new Set<string>();
   const features = new Set<string>();
   const seriesIds = new Set<string>();
+  const rarities = new Set<string>();
+  
+  // レアリティの表示順序
+  const RARITY_ORDER: Record<string, number> = {
+    'L': 0, 'SEC': 1, 'SP': 2, 'SR': 3, 'R': 4, 'UC': 5, 'C': 6, 'P': 7,
+  };
   
   cards.forEach(card => {
     card.color.forEach(c => colors.add(c));
@@ -352,6 +365,7 @@ export function getUniqueValues(cards: Card[]) {
     if (card.block_icon && card.block_icon !== '-') blocks.add(card.block_icon);
     card.features.forEach(f => features.add(f));
     if (card.series_id && card.series_id !== '-') seriesIds.add(card.series_id);
+    if (card.rarity && card.rarity !== '-') rarities.add(card.rarity);
   });
   
   return {
@@ -364,6 +378,7 @@ export function getUniqueValues(cards: Card[]) {
     blocks: Array.from(blocks).sort(),
     features: Array.from(features).sort(),
     seriesIds: Array.from(seriesIds).sort(),
+    rarities: Array.from(rarities).sort((a, b) => (RARITY_ORDER[a] ?? 999) - (RARITY_ORDER[b] ?? 999)),
   };
 }
 

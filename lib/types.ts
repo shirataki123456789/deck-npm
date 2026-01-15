@@ -31,6 +31,7 @@ export interface FilterOptions {
   blocks: string[];
   features: string[];
   series_ids: string[];
+  rarities: string[];    // レアリティフィルター
   free_words: string;
   leader_colors: string[];  // デッキ作成時のリーダー色制限
   parallel_mode: 'normal' | 'parallel' | 'both';
@@ -98,6 +99,7 @@ export const DEFAULT_FILTER_OPTIONS: FilterOptions = {
   blocks: [],
   features: [],
   series_ids: [],
+  rarities: [],
   free_words: '',
   leader_colors: [],
   parallel_mode: 'normal',
