@@ -16,29 +16,31 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // 許可するドメインをチェック
-    const allowedDomains = [
-      'onepiece-cardgame.com',
-      'www.onepiece-cardgame.com',
-    ];
-    
-    const urlObj = new URL(url);
-    const isAllowed = allowedDomains.some(domain => 
-      urlObj.hostname === domain || urlObj.hostname.endsWith('.' + domain)
-    );
-    
-    if (!isAllowed) {
+    // URLの形式をチェック
+    let urlObj: URL;
+    try {
+      urlObj = new URL(url);
+    } catch {
       return NextResponse.json(
-        { error: 'Domain not allowed' },
-        { status: 403 }
+        { error: 'Invalid URL' },
+        { status: 400 }
+      );
+    }
+    
+    // httpまたはhttpsのみ許可
+    if (!['http:', 'https:'].includes(urlObj.protocol)) {
+      return NextResponse.json(
+        { error: 'Invalid protocol' },
+        { status: 400 }
       );
     }
     
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(15000),
     });
     
     if (!response.ok) {
@@ -48,7 +50,16 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    const contentType = response.headers.get('content-type') || 'image/png';
+    const contentType = response.headers.get('content-type') || '';
+    
+    // 画像のみ許可
+    if (!contentType.startsWith('image/')) {
+      return NextResponse.json(
+        { error: 'Not an image' },
+        { status: 403 }
+      );
+    }
+    
     const buffer = await response.arrayBuffer();
     
     return new NextResponse(buffer, {
