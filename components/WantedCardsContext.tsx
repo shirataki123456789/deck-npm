@@ -48,6 +48,9 @@ function sortCards(cards: Card[]): Card[] {
   });
 }
 
+// ブックマーク用のsessionStorageキー
+const BOOKMARKS_STORAGE_KEY = 'deck_builder_bookmarks';
+
 interface WantedCard {
   card: Card;
   count: number;  // 必要数
@@ -69,12 +72,55 @@ interface WantedCardsContextType {
   getWantedCardIds: () => string[];
   importFromText: (text: string, allCards: Card[]) => number;
   exportToText: () => string;
+  // ブックマーク機能
+  bookmarkedCardIds: string[];
+  toggleBookmark: (cardId: string) => void;
+  isBookmarked: (cardId: string) => boolean;
+  clearBookmarks: () => void;
 }
 
 const WantedCardsContext = createContext<WantedCardsContextType | null>(null);
 
 export function WantedCardsProvider({ children }: { children: ReactNode }) {
   const [wantedCards, setWantedCards] = useState<WantedCard[]>([]);
+  
+  // ブックマーク状態（sessionStorageから復元）
+  const [bookmarkedCardIds, setBookmarkedCardIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(BOOKMARKS_STORAGE_KEY);
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return [];
+  });
+  
+  // ブックマークをsessionStorageに保存
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarkedCardIds));
+    } catch {}
+  }, [bookmarkedCardIds]);
+  
+  // ブックマークのトグル
+  const toggleBookmark = useCallback((cardId: string) => {
+    setBookmarkedCardIds(prev => {
+      if (prev.includes(cardId)) {
+        return prev.filter(id => id !== cardId);
+      }
+      return [...prev, cardId];
+    });
+  }, []);
+  
+  // ブックマークチェック
+  const isBookmarked = useCallback((cardId: string) => {
+    return bookmarkedCardIds.includes(cardId);
+  }, [bookmarkedCardIds]);
+  
+  // ブックマーククリア
+  const clearBookmarks = useCallback(() => {
+    setBookmarkedCardIds([]);
+  }, []);
 
   // ソート済みリスト
   const sortedWantedCards = useMemo(() => {
@@ -207,6 +253,11 @@ export function WantedCardsProvider({ children }: { children: ReactNode }) {
       getWantedCardIds,
       importFromText,
       exportToText,
+      // ブックマーク
+      bookmarkedCardIds,
+      toggleBookmark,
+      isBookmarked,
+      clearBookmarks,
     }}>
       {children}
     </WantedCardsContext.Provider>

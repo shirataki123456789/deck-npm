@@ -23,6 +23,9 @@ interface CardGridProps {
   showWantedBadge?: boolean;
   // カードクリックで直接虫眼鏡を開く
   clickToZoom?: boolean;
+  // ブックマーク機能
+  isBookmarked?: (cardId: string) => boolean;
+  onToggleBookmark?: (cardId: string) => void;
 }
 
 export default function CardGrid({
@@ -40,6 +43,8 @@ export default function CardGrid({
   getOwnedCount,
   showWantedBadge = false,
   clickToZoom = false,
+  isBookmarked,
+  onToggleBookmark,
 }: CardGridProps) {
   const [zoomedIndex, setZoomedIndex] = useState<number | null>(null);
   
@@ -86,6 +91,8 @@ export default function CardGrid({
         onNavigate={handleNavigate}
         getWantedCount={getWantedCount}
         getOwnedCount={getOwnedCount}
+        isBookmarked={zoomedIndex !== null && isBookmarked ? isBookmarked(cards[zoomedIndex].card_id) : false}
+        onToggleBookmark={onToggleBookmark}
       />
     </>
   );

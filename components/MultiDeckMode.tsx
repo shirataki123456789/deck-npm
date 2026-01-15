@@ -112,6 +112,7 @@ export default function MultiDeckMode() {
   const [loading, setLoading] = useState(false);
   const [colsCount, setColsCount] = useState(4);
   const [wantedOnly, setWantedOnly] = useState(false);
+  const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
 
   // UI状態
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -121,15 +122,30 @@ export default function MultiDeckMode() {
   const [editingTagsTabId, setEditingTagsTabId] = useState<string | null>(null);
   const [newTagInput, setNewTagInput] = useState('');
 
-  // 必要カードリスト
-  const { updateWantedCount, updateOwnedCount, getWantedCount, getOwnedCount, getWantedCardIds } = useWantedCards();
+  // 必要カードリスト & ブックマーク
+  const { 
+    updateWantedCount, 
+    updateOwnedCount, 
+    getWantedCount, 
+    getOwnedCount, 
+    getWantedCardIds,
+    bookmarkedCardIds,
+    toggleBookmark,
+    isBookmarked,
+  } = useWantedCards();
 
-  // 必要リストフィルター適用
+  // 必要リスト・ブックマークフィルター適用
   const displayCards = useMemo(() => {
-    if (!wantedOnly) return filteredCards;
-    const wantedIds = getWantedCardIds();
-    return filteredCards.filter(c => wantedIds.includes(c.card_id));
-  }, [filteredCards, wantedOnly, getWantedCardIds]);
+    let result = filteredCards;
+    if (wantedOnly) {
+      const wantedIds = getWantedCardIds();
+      result = result.filter(c => wantedIds.includes(c.card_id));
+    }
+    if (bookmarkedOnly) {
+      result = result.filter(c => bookmarkedCardIds.includes(c.card_id));
+    }
+    return result;
+  }, [filteredCards, wantedOnly, bookmarkedOnly, getWantedCardIds, bookmarkedCardIds]);
 
   // タブが変更されたらsessionStorageに保存
   useEffect(() => {
@@ -1194,19 +1210,33 @@ export default function MultiDeckMode() {
                       hideLeaderType={true}
                     />
                   )}
-                  {/* 必要リストフィルター */}
-                  <div className="mt-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={wantedOnly}
-                        onChange={(e) => setWantedOnly(e.target.checked)}
-                        className="w-4 h-4 rounded text-orange-500"
-                      />
-                      <span className="text-sm font-medium text-orange-700">
-                        📋 必要リストのカードのみ表示
-                      </span>
+                  {/* 必要カード・ブックマークフィルター */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      カード絞り込み
                     </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setWantedOnly(!wantedOnly)}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          wantedOnly
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        📋 必要カード
+                      </button>
+                      <button
+                        onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          bookmarkedOnly
+                            ? 'bg-yellow-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        ★ ブックマーク
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                     <label className="block text-sm font-medium text-gray-700 mb-2">表示列数</label>
@@ -1253,6 +1283,8 @@ export default function MultiDeckMode() {
                     getWantedCount={getWantedCount}
                     getOwnedCount={getOwnedCount}
                     showWantedBadge={wantedOnly}
+                    isBookmarked={isBookmarked}
+                    onToggleBookmark={toggleBookmark}
                   />
                 )}
               </div>

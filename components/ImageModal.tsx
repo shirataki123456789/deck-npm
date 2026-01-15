@@ -17,6 +17,9 @@ interface ImageModalProps {
   onNavigate?: (index: number) => void;
   getWantedCount?: (cardId: string) => number;
   getOwnedCount?: (cardId: string) => number;
+  // ブックマーク用
+  isBookmarked?: boolean;
+  onToggleBookmark?: (cardId: string) => void;
 }
 
 // ブランクカードをCanvasで描画（モーダル用大きめサイズ）
@@ -88,6 +91,8 @@ export default function ImageModal({
   onNavigate,
   getWantedCount,
   getOwnedCount,
+  isBookmarked = false,
+  onToggleBookmark,
 }: ImageModalProps) {
   // スワイプ用
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
@@ -261,6 +266,20 @@ export default function ImageModal({
                 <h3 className="font-bold text-lg">{displayCard.name}</h3>
                 <p className="text-gray-600 text-sm">{displayCard.card_id}</p>
               </div>
+              {/* ブックマークボタン */}
+              {onToggleBookmark && (
+                <button
+                  onClick={() => onToggleBookmark(displayCard.card_id)}
+                  className={`p-2 rounded-lg text-xl transition-colors flex-shrink-0 ${
+                    isBookmarked
+                      ? 'bg-yellow-100 text-yellow-500'
+                      : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                  }`}
+                  title={isBookmarked ? 'ブックマーク解除' : 'ブックマーク'}
+                >
+                  {isBookmarked ? '★' : '☆'}
+                </button>
+              )}
               <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
                 {displayCard.color.map(c => (
                   <span key={c} className={`color-badge color-badge-${c}`}>
