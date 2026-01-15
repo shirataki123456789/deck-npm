@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import SearchMode from '@/components/SearchMode';
 import DeckMode from '@/components/DeckMode';
 import MultiDeckMode from '@/components/MultiDeckMode';
@@ -28,6 +28,16 @@ function HomeContent() {
   const [mode, setMode] = useState<Mode>('search');
   const [showWantedPanel, setShowWantedPanel] = useState(false);
   const { totalWantedCount } = useWantedCards();
+
+  // DeckModeからのモード切り替えイベントをリッスン
+  useEffect(() => {
+    const handleSwitchToMultiDeck = () => {
+      setMode('multi');
+    };
+    
+    window.addEventListener('switchToMultiDeck', handleSwitchToMultiDeck);
+    return () => window.removeEventListener('switchToMultiDeck', handleSwitchToMultiDeck);
+  }, []);
 
   return (
     <div className="min-h-screen pb-16 sm:pb-0">
