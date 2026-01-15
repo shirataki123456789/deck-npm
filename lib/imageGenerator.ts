@@ -42,12 +42,10 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 /**
  * 画像をロード
  */
-function loadImage(url: string, useCors: boolean = true): Promise<HTMLImageElement> {
+function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    if (useCors) {
-      img.crossOrigin = 'anonymous';
-    }
+    img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
     img.src = url;
@@ -55,37 +53,20 @@ function loadImage(url: string, useCors: boolean = true): Promise<HTMLImageEleme
 }
 
 /**
- * プロキシURLを使って画像をロード（CORS対策、data URL対応）
+ * プロキシURLを使って画像をロード（CORS対策）
  */
 async function loadImageWithProxy(url: string): Promise<HTMLImageElement | null> {
-  if (!url) return null;
-  
-  // data URLの場合はCORS不要で直接読み込み
-  if (url.startsWith('data:')) {
-    try {
-      return await loadImage(url, false);
-    } catch {
-      console.error('Failed to load data URL image');
-      return null;
-    }
-  }
-  
   try {
     // 直接ロードを試みる
     return await loadImage(url);
   } catch {
+    // CORSエラーの場合はプロキシを使用
     try {
-      // CORS なしで試行
-      return await loadImage(url, false);
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+      return await loadImage(proxyUrl);
     } catch {
-      // CORSエラーの場合はプロキシを使用
-      try {
-        const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-        return await loadImage(proxyUrl);
-      } catch {
-        console.error('Failed to load image:', url);
-        return null;
-      }
+      console.error('Failed to load image:', url);
+      return null;
     }
   }
 }
@@ -816,7 +797,7 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
   
   if (qrDataUrl) {
     try {
-      const qrImg = await loadImage(qrDataUrl, false);  // data URLはCORS不要
+      const qrImg = await loadImage(qrDataUrl);
       ctx.drawImage(qrImg, qrX, qrY, QR_SIZE, QR_SIZE);
     } catch (e) {
       console.error('QR code draw error:', e);
