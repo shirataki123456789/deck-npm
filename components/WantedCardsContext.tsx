@@ -282,27 +282,48 @@ const COLOR_RGB: Record<string, string> = {
   '黄': '#eab308',
 };
 
-// 画像読み込み関数（プロキシ対応）
+// 画像読み込み関数（プロキシ対応、data URL対応）
 async function loadImageWithProxy(url: string): Promise<HTMLImageElement | null> {
-  const loadImage = (src: string): Promise<HTMLImageElement> => {
+  if (!url) return null;
+  
+  const loadImage = (src: string, useCors: boolean = true): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      if (useCors) {
+        img.crossOrigin = 'anonymous';
+      }
       img.onload = () => resolve(img);
       img.onerror = reject;
       img.src = src;
     });
   };
 
+  // data URLの場合はCORS不要で直接読み込み
+  if (url.startsWith('data:')) {
+    try {
+      return await loadImage(url, false);
+    } catch {
+      console.error('Failed to load data URL image');
+      return null;
+    }
+  }
+
+  // 通常のURLの場合
   try {
     return await loadImage(url);
   } catch {
     try {
-      const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-      return await loadImage(proxyUrl);
+      // CORS なしで試行
+      return await loadImage(url, false);
     } catch {
-      console.error('Failed to load image:', url);
-      return null;
+      try {
+        // プロキシ経由で試行
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+        return await loadImage(proxyUrl);
+      } catch {
+        console.error('Failed to load image:', url);
+        return null;
+      }
     }
   }
 }
@@ -692,7 +713,7 @@ function QRImportModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { importFromText } = useWantedCards();
 
-  // 画像からQRコード読み取り
+  // 画像からQRコード読み取り（複数領域をスキャン）
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -711,20 +732,55 @@ function QRImportModal({
       });
 
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
       const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      
+      // スキャンする領域のリスト（右上、全体、左上、中央上部）
+      const regions = [
+        // 右上（QRの位置）
+        { x: img.width * 0.5, y: 0, w: img.width * 0.5, h: Math.min(img.height * 0.4, 800) },
+        // 全体（縮小）
+        { x: 0, y: 0, w: img.width, h: img.height },
+        // 上部全体
+        { x: 0, y: 0, w: img.width, h: Math.min(img.height * 0.5, 1000) },
+        // 右上（より大きく）
+        { x: img.width * 0.4, y: 0, w: img.width * 0.6, h: Math.min(img.height * 0.5, 1200) },
+      ];
+      
+      let code = null;
+      
+      for (const region of regions) {
+        // 領域を切り出してスキャン
+        canvas.width = region.w;
+        canvas.height = region.h;
+        ctx.drawImage(img, region.x, region.y, region.w, region.h, 0, 0, region.w, region.h);
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        code = jsQR(imageData.data, imageData.width, imageData.height);
+        
+        if (code) break;
+        
+        // 縮小してリトライ
+        if (region.w > 1000) {
+          const scale = 1000 / region.w;
+          const scaledW = Math.floor(region.w * scale);
+          const scaledH = Math.floor(region.h * scale);
+          canvas.width = scaledW;
+          canvas.height = scaledH;
+          ctx.drawImage(img, region.x, region.y, region.w, region.h, 0, 0, scaledW, scaledH);
+          
+          const scaledData = ctx.getImageData(0, 0, scaledW, scaledH);
+          code = jsQR(scaledData.data, scaledData.width, scaledData.height);
+          
+          if (code) break;
+        }
+      }
 
       URL.revokeObjectURL(url);
 
       if (code) {
         setScannedText(code.data);
       } else {
-        alert('QRコードを検出できませんでした');
+        alert('QRコードを検出できませんでした。\n画像が鮮明でQRコードが含まれていることを確認してください。');
       }
     } catch (error) {
       console.error('QR scan error:', error);
