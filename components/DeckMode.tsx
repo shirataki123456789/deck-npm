@@ -282,16 +282,25 @@ export default function DeckMode() {
     
     // 既存のデッキカードをフィルタリング
     const filteredDeckCards: Record<string, number> = {};
+    const removedCards: string[] = [];
+    
     Object.entries(deck.cards).forEach(([cardId, count]) => {
-      const existingCard = allCards.find(c => c.card_id === cardId);
+      const existingCard = allCards.find(c => c.card_id === cardId) || blankCards.find(c => c.card_id === cardId);
       if (existingCard) {
         // カードの色がリーダーの色に含まれるかチェック
         const hasMatchingColor = existingCard.color.some(c => newLeaderColors.includes(c));
         if (hasMatchingColor) {
           filteredDeckCards[cardId] = count;
+        } else {
+          removedCards.push(existingCard.name);
         }
       }
     });
+    
+    // 削除されたカードがあれば通知
+    if (removedCards.length > 0) {
+      alert(`リーダーの色に合わないカードが除外されました:\n${removedCards.slice(0, 5).join('\n')}${removedCards.length > 5 ? `\n...他${removedCards.length - 5}枚` : ''}`);
+    }
     
     setLeaderCard(card);
     setDeck({
@@ -387,11 +396,12 @@ export default function DeckMode() {
   // デッキ合計枚数
   const totalCards = Object.values(deck.cards).reduce((sum, count) => sum + count, 0);
   
-  // リーダー変更（リセット）
+  // リーダー変更（カードは保持したままリーダー選択画面へ）
   const handleChangeLeader = () => {
+    // リーダーのみクリア、デッキカードは保持
     setLeaderCard(null);
-    setDeck({ name: '', leader: '', cards: {} });
-    setBlankCards([]);
+    setDeck(prev => ({ ...prev, leader: '' }));
+    // ブランクカードは保持（新リーダー選択時にフィルタリングされる）
     setView('leader');
   };
   

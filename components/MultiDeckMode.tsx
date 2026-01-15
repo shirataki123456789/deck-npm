@@ -394,12 +394,35 @@ export default function MultiDeckMode() {
 
   // === デッキ操作 ===
   const handleSelectLeader = (card: Card) => {
+    const newLeaderColors = card.color;
     const defaultName = `${card.color.join('')}${card.name}`;
+    
+    // 既存のデッキカードをフィルタリング
+    const filteredDeckCards: Record<string, number> = {};
+    const removedCards: string[] = [];
+    
+    Object.entries(activeTab.deck.cards).forEach(([cardId, count]) => {
+      const existingCard = allCards.find(c => c.card_id === cardId) || activeTab.blankCards.find(c => c.card_id === cardId);
+      if (existingCard) {
+        const hasMatchingColor = existingCard.color.some(c => newLeaderColors.includes(c));
+        if (hasMatchingColor) {
+          filteredDeckCards[cardId] = count;
+        } else {
+          removedCards.push(existingCard.name);
+        }
+      }
+    });
+    
+    // 削除されたカードがあれば通知
+    if (removedCards.length > 0) {
+      alert(`リーダーの色に合わないカードが除外されました:\n${removedCards.slice(0, 5).join('\n')}${removedCards.length > 5 ? `\n...他${removedCards.length - 5}枚` : ''}`);
+    }
+    
     updateTab(activeTabId, {
       leaderCard: card,
-      deck: { name: defaultName, leader: card.card_id, cards: {} },
+      deck: { name: activeTab.deck.name || defaultName, leader: card.card_id, cards: filteredDeckCards },
       view: 'preview',
-      name: defaultName,
+      name: activeTab.name || defaultName,
     });
     setFilter(prev => ({ ...prev, leader_colors: card.color }));
   };
@@ -441,9 +464,10 @@ export default function MultiDeckMode() {
   };
 
   const handleChangeLeader = () => {
+    // リーダーのみクリア、デッキカードは保持
     updateTab(activeTabId, {
       leaderCard: null,
-      deck: { name: '', leader: '', cards: {} },
+      deck: { ...activeTab.deck, leader: '' },
       view: 'leader',
     });
   };
