@@ -16,19 +16,49 @@ interface FilterMeta {
   blocks: string[];
   features: string[];
   seriesIds: string[];
+  rarities: string[];
 }
+
+const SEARCH_STATE_KEY = 'deck_builder_search_state';
 
 export default function SearchMode() {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterOptions>(DEFAULT_FILTER_OPTIONS);
+  const [filter, setFilter] = useState<FilterOptions>(() => {
+    // sessionStorageから復元
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(SEARCH_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return { ...DEFAULT_FILTER_OPTIONS, ...parsed.filter };
+        }
+      } catch {}
+    }
+    return DEFAULT_FILTER_OPTIONS;
+  });
   const [filterMeta, setFilterMeta] = useState<FilterMeta | null>(null);
-  const [colsCount, setColsCount] = useState(4);
+  const [colsCount, setColsCount] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(SEARCH_STATE_KEY);
+        if (saved) return JSON.parse(saved).colsCount || 4;
+      } catch {}
+    }
+    return 4;
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [wantedOnly, setWantedOnly] = useState(false);
   
   // 必要カードリスト
   const { updateWantedCount, updateOwnedCount, getWantedCount, getOwnedCount, getWantedCardIds } = useWantedCards();
+  
+  // 状態をsessionStorageに保存
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify({ filter, colsCount }));
+    } catch {}
+  }, [filter, colsCount]);
   
   // フィルタメタデータを取得
   useEffect(() => {
@@ -45,6 +75,7 @@ export default function SearchMode() {
           blocks: data.blocks || [],
           features: data.features || [],
           seriesIds: data.seriesIds || [],
+          rarities: data.rarities || [],
         });
       })
       .catch(console.error);

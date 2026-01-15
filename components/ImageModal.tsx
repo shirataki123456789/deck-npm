@@ -210,7 +210,7 @@ export default function ImageModal({
       
       {/* メインコンテンツ */}
       <div 
-        className="flex-1 flex items-center justify-center p-4 overflow-auto relative"
+        className="flex-1 flex items-start justify-center p-4 overflow-y-auto relative"
         onClick={onClose}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -220,7 +220,7 @@ export default function ImageModal({
         {canGoPrev && (
           <button
             onClick={(e) => { e.stopPropagation(); goToPrev(); }}
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full w-12 h-12 flex items-center justify-center text-2xl shadow-lg"
+            className="fixed left-2 top-1/2 -translate-y-1/2 z-10 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full w-12 h-12 flex items-center justify-center text-2xl shadow-lg"
           >
             ◀
           </button>
@@ -230,7 +230,7 @@ export default function ImageModal({
         {canGoNext && (
           <button
             onClick={(e) => { e.stopPropagation(); goToNext(); }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full w-12 h-12 flex items-center justify-center text-2xl shadow-lg"
+            className="fixed right-2 top-1/2 -translate-y-1/2 z-10 bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full w-12 h-12 flex items-center justify-center text-2xl shadow-lg"
           >
             ▶
           </button>

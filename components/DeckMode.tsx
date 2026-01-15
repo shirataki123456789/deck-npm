@@ -23,19 +23,37 @@ interface FilterMeta {
   blocks: string[];
   features: string[];
   seriesIds: string[];
+  rarities: string[];
 }
 
+const DECK_STATE_KEY = 'deck_builder_single_deck_state';
+
 export default function DeckMode() {
-  // デッキ状態
-  const [deck, setDeck] = useState<Deck>({
-    name: '',
-    leader: '',
-    cards: {},
+  // デッキ状態（sessionStorageから復元）
+  const [deck, setDeck] = useState<Deck>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(DECK_STATE_KEY);
+        if (saved) return JSON.parse(saved).deck || { name: '', leader: '', cards: {} };
+      } catch {}
+    }
+    return { name: '', leader: '', cards: {} };
   });
   const [leaderCard, setLeaderCard] = useState<Card | null>(null);
   
   // 画面状態
-  const [view, setView] = useState<DeckView>('leader');
+  const [view, setView] = useState<DeckView>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(DECK_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return parsed.view || (parsed.deck?.leader ? 'preview' : 'leader');
+        }
+      } catch {}
+    }
+    return 'leader';
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
   const [csvEditorOpen, setCsvEditorOpen] = useState(false);
@@ -44,18 +62,56 @@ export default function DeckMode() {
   const [allCards, setAllCards] = useState<Card[]>([]); // 全カードのキャッシュ
   const [blankCards, setBlankCards] = useState<Card[]>([]); // ブランクカード
   const [filteredCards, setFilteredCards] = useState<Card[]>([]);
-  const [filter, setFilter] = useState<FilterOptions>({
-    ...DEFAULT_FILTER_OPTIONS,
-    types: [], // 未選択で全表示（リーダーはleader_colorsで除外される）
+  const [filter, setFilter] = useState<FilterOptions>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(DECK_STATE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return { ...DEFAULT_FILTER_OPTIONS, types: [], ...parsed.filter };
+        }
+      } catch {}
+    }
+    return { ...DEFAULT_FILTER_OPTIONS, types: [] };
   });
   const [filterMeta, setFilterMeta] = useState<FilterMeta | null>(null);
   const [loading, setLoading] = useState(false);
-  const [colsCount, setColsCount] = useState(4);
+  const [colsCount, setColsCount] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(DECK_STATE_KEY);
+        if (saved) return JSON.parse(saved).colsCount || 4;
+      } catch {}
+    }
+    return 4;
+  });
   const [showBlankCardModal, setShowBlankCardModal] = useState(false);
   const [wantedOnly, setWantedOnly] = useState(false);
   
   // 必要カードリスト
   const { updateWantedCount, updateOwnedCount, getWantedCount, getOwnedCount, getWantedCardIds } = useWantedCards();
+  
+  // 状態をsessionStorageに保存
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DECK_STATE_KEY, JSON.stringify({ 
+        deck, 
+        view: view === 'add_cards' ? 'preview' : view, // add_cardsは保存しない
+        filter, 
+        colsCount 
+      }));
+    } catch {}
+  }, [deck, view, filter, colsCount]);
+  
+  // 初回ロード時にリーダーカードを復元
+  useEffect(() => {
+    if (deck.leader && !leaderCard && allCards.length > 0) {
+      const leader = allCards.find(c => c.card_id === deck.leader);
+      if (leader) {
+        setLeaderCard(leader);
+      }
+    }
+  }, [deck.leader, leaderCard, allCards]);
   
   // 必要リストフィルター適用
   const displayCards = useMemo(() => {
@@ -139,6 +195,7 @@ export default function DeckMode() {
           blocks: data.blocks || [],
           features: data.features || [],
           seriesIds: data.seriesIds || [],
+          rarities: data.rarities || [],
         });
       })
       .catch(console.error);
@@ -219,13 +276,28 @@ export default function DeckMode() {
     }
   }, [filter, view, leaderCard, searchCards]);
   
-  // リーダー選択
+  // リーダー選択（既存カードを保持し、新リーダーの色に合うものだけ残す）
   const handleSelectLeader = (card: Card) => {
+    const newLeaderColors = card.color;
+    
+    // 既存のデッキカードをフィルタリング
+    const filteredDeckCards: Record<string, number> = {};
+    Object.entries(deck.cards).forEach(([cardId, count]) => {
+      const existingCard = allCards.find(c => c.card_id === cardId);
+      if (existingCard) {
+        // カードの色がリーダーの色に含まれるかチェック
+        const hasMatchingColor = existingCard.color.some(c => newLeaderColors.includes(c));
+        if (hasMatchingColor) {
+          filteredDeckCards[cardId] = count;
+        }
+      }
+    });
+    
     setLeaderCard(card);
     setDeck({
-      name: '',
+      name: deck.name,
       leader: card.card_id,
-      cards: {},
+      cards: filteredDeckCards,
     });
     setView('preview');
   };
@@ -321,6 +393,28 @@ export default function DeckMode() {
     setDeck({ name: '', leader: '', cards: {} });
     setBlankCards([]);
     setView('leader');
+  };
+  
+  // マルチデッキに追加
+  const handleAddToMultiDeck = () => {
+    if (!leaderCard || Object.keys(deck.cards).length === 0) {
+      alert('デッキにカードを追加してください');
+      return;
+    }
+    
+    // カスタムイベントを発火してMultiDeckModeに通知
+    const event = new CustomEvent('addToMultiDeck', { 
+      detail: { 
+        deck: { ...deck, name: deck.name || `${leaderCard.name}デッキ` },
+        leaderCard,
+        blankCards: blankCards.filter(c => 
+          deck.cards[c.card_id] || c.card_id === deck.leader
+        ),
+      }
+    });
+    window.dispatchEvent(event);
+    
+    alert('マルチデッキに追加しました！\n「デッキ一覧」タブで確認できます。');
   };
   
   // デッキインポート（ブランクカードの枚数情報も含む）
@@ -502,7 +596,17 @@ export default function DeckMode() {
         
         {/* デッキプレビュー画面 */}
         {view === 'preview' && leaderCard && (
-          <DeckPreview
+          <>
+            {/* マルチデッキ追加ボタン */}
+            <div className="mb-4 flex justify-end">
+              <button
+                onClick={handleAddToMultiDeck}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+              >
+                📁 マルチデッキに追加
+              </button>
+            </div>
+            <DeckPreview
             deck={deck}
             leaderCard={leaderCard}
             allCards={allCards}
@@ -521,6 +625,7 @@ export default function DeckMode() {
             getWantedCount={getWantedCount}
             getOwnedCount={getOwnedCount}
           />
+          </>
         )}
         
         {/* カード追加画面 */}

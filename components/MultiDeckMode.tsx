@@ -32,6 +32,7 @@ interface FilterMeta {
   blocks: string[];
   features: string[];
   seriesIds: string[];
+  rarities: string[];
 }
 
 // sessionStorageキー
@@ -134,6 +135,39 @@ export default function MultiDeckMode() {
   useEffect(() => {
     saveTabsToStorage(tabs);
   }, [tabs]);
+
+  // 単独デッキモードからのデッキ追加イベントをリッスン
+  useEffect(() => {
+    const handleAddToMultiDeck = (e: CustomEvent<{ deck: Deck; leaderCard: Card; blankCards: Card[] }>) => {
+      const { deck, leaderCard, blankCards } = e.detail;
+      
+      // 新しいタブを作成
+      const newTab: DeckTab = {
+        id: generateTabId(),
+        name: deck.name || `${leaderCard.name}デッキ`,
+        deck,
+        leaderCard,
+        view: 'preview',
+        blankCards,
+        tags: [],
+      };
+      
+      setTabs(prev => [...prev, newTab]);
+      setActiveTabId(newTab.id);
+      
+      // ブランクカードをallCardsに追加
+      if (blankCards.length > 0) {
+        setAllCards(prev => {
+          const existingIds = new Set(prev.map(c => c.card_id));
+          const newCards = blankCards.filter(c => !existingIds.has(c.card_id));
+          return [...prev, ...newCards];
+        });
+      }
+    };
+    
+    window.addEventListener('addToMultiDeck', handleAddToMultiDeck as EventListener);
+    return () => window.removeEventListener('addToMultiDeck', handleAddToMultiDeck as EventListener);
+  }, []);
 
   // アクティブなタブ
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
@@ -280,6 +314,7 @@ export default function MultiDeckMode() {
           blocks: metaData.blocks || [],
           features: metaData.features || [],
           seriesIds: metaData.seriesIds || [],
+          rarities: metaData.rarities || [],
         });
 
         const cardsRes = await fetch('/api/cards', {

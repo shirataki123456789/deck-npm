@@ -13,6 +13,7 @@ interface FilterMeta {
   blocks: string[];
   features: string[];
   seriesIds: string[];
+  rarities: string[];
 }
 
 interface FilterPanelProps {
@@ -245,6 +246,38 @@ export default function FilterPanel({
         </div>
       </div>
       
+      {/* レアリティ */}
+      {meta.rarities && meta.rarities.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            レアリティ
+          </label>
+          <div className="flex flex-wrap gap-1">
+            {meta.rarities.map(rarity => (
+              <button
+                key={rarity}
+                onClick={() => updateFilter({ rarities: toggleArrayItem(filter.rarities || [], rarity) })}
+                className={`px-3 py-1.5 text-sm rounded border transition-colors ${
+                  (filter.rarities || []).includes(rarity)
+                    ? 'bg-purple-600 text-white border-purple-600'
+                    : 'bg-white border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {rarity}
+              </button>
+            ))}
+            {(filter.rarities || []).length > 0 && (
+              <button
+                onClick={() => updateFilter({ rarities: [] })}
+                className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+              >
+                クリア
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      
       {/* コスト */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -428,6 +461,7 @@ export default function FilterPanel({
           blocks: [],
           features: [],
           series_ids: [],
+          rarities: [],
           free_words: '',
           leader_colors: filter.leader_colors, // リーダー色は維持
           parallel_mode: 'normal',
