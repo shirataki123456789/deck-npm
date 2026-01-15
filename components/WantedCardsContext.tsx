@@ -354,7 +354,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       const FINAL_WIDTH = 2150;
       const PADDING = 40;
       const HEADER_HEIGHT = 100;
-      const QR_SIZE = 300;
+      const QR_SIZE = 450;  // QRサイズを大きく
       const GAP = 10;
 
       // カードレイアウト計算（8列）
@@ -365,7 +365,7 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
       const CARD_TOTAL_HEIGHT = CARD_HEIGHT + INFO_HEIGHT;
 
       // QRエリアの高さ
-      const QR_AREA_HEIGHT = QR_SIZE + 60;
+      const QR_AREA_HEIGHT = QR_SIZE + 80;
       
       // カードグリッドの開始位置（QRの下から）
       const gridStartX = PADDING;
@@ -410,7 +410,8 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
         const QRCode = (await import('qrcode')).default;
         const qrDataUrl = await QRCode.toDataURL(qrText, {
           width: QR_SIZE,
-          margin: 2,
+          margin: 3,
+          errorCorrectionLevel: 'H',  // 最高レベルのエラー訂正
           color: { dark: '#000000', light: '#ffffff' },
         });
 
@@ -420,16 +421,16 @@ export function WantedCardsPanel({ onClose }: { onClose: () => void }) {
           const qrX = FINAL_WIDTH - QR_SIZE - PADDING;
           const qrY = HEADER_HEIGHT + 20;
           
-          // QR背景
+          // QR背景（大きめの白い余白）
           ctx.fillStyle = '#ffffff';
-          ctx.fillRect(qrX - 10, qrY - 10, QR_SIZE + 20, QR_SIZE + 40);
+          ctx.fillRect(qrX - 20, qrY - 20, QR_SIZE + 40, QR_SIZE + 60);
           ctx.drawImage(qrImg, qrX, qrY, QR_SIZE, QR_SIZE);
           
           // QRラベル
           ctx.fillStyle = '#333333';
-          ctx.font = '18px sans-serif';
+          ctx.font = '22px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('インポート用QR', qrX + QR_SIZE / 2, qrY + QR_SIZE + 22);
+          ctx.fillText('インポート用QR', qrX + QR_SIZE / 2, qrY + QR_SIZE + 30);
         }
       }
 
