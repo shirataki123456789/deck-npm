@@ -282,48 +282,27 @@ const COLOR_RGB: Record<string, string> = {
   '黄': '#eab308',
 };
 
-// 画像読み込み関数（プロキシ対応、data URL対応）
+// 画像読み込み関数（プロキシ対応）
 async function loadImageWithProxy(url: string): Promise<HTMLImageElement | null> {
-  if (!url) return null;
-  
-  const loadImage = (src: string, useCors: boolean = true): Promise<HTMLImageElement> => {
+  const loadImage = (src: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      if (useCors) {
-        img.crossOrigin = 'anonymous';
-      }
+      img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
       img.onerror = reject;
       img.src = src;
     });
   };
 
-  // data URLの場合はCORS不要で直接読み込み
-  if (url.startsWith('data:')) {
-    try {
-      return await loadImage(url, false);
-    } catch {
-      console.error('Failed to load data URL image');
-      return null;
-    }
-  }
-
-  // 通常のURLの場合
   try {
     return await loadImage(url);
   } catch {
     try {
-      // CORS なしで試行
-      return await loadImage(url, false);
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+      return await loadImage(proxyUrl);
     } catch {
-      try {
-        // プロキシ経由で試行
-        const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-        return await loadImage(proxyUrl);
-      } catch {
-        console.error('Failed to load image:', url);
-        return null;
-      }
+      console.error('Failed to load image:', url);
+      return null;
     }
   }
 }
