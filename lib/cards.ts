@@ -327,11 +327,12 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
             // 速攻：テキストに速攻を含む
             return card.text && card.text.includes('速攻');
           case 'blocker':
-            // ブロッカー：テキストにブロッカーを含み、ブロッカーを発動を含まない
-            return card.text && card.text.includes('ブロッカー') && !card.text.includes('ブロッカーを発動');
+            // ブロッカー：テキストに「ブロッカー」を含み、「【ブロッカー】を発動」を含まない
+            return card.text && card.text.includes('ブロッカー') && 
+                   !card.text.includes('【ブロッカー】を発動');
           case 'blocker_bypass':
-            // ブロッカー貫通：テキストにブロッカーを発動できないを含む
-            return card.text && card.text.includes('ブロッカーを発動できない');
+            // ブロッカー貫通：テキストに「【ブロッカー】を発動できない」を含む
+            return card.text && card.text.includes('【ブロッカー】を発動できない');
           case 'trigger':
             // トリガー：トリガーの項目がある
             return card.trigger && card.trigger.trim() !== '' && card.trigger !== '-';
