@@ -315,11 +315,37 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
     });
   }
   
-  // 12) トリガーフィルタ
-  if (options.has_trigger === true) {
-    result = result.filter(c => c.trigger && c.trigger.trim() !== '' && c.trigger !== '-');
-  } else if (options.has_trigger === false) {
-    result = result.filter(c => !c.trigger || c.trigger.trim() === '' || c.trigger === '-');
+  // 12) 特性フィルタ
+  if (options.traits && options.traits.length > 0) {
+    result = result.filter(card => {
+      return options.traits.some(trait => {
+        switch (trait) {
+          case 'vanilla':
+            // バニラ：効果が空欄のカード
+            return !card.text || card.text.trim() === '' || card.text === '-';
+          case 'rush':
+            // 速攻：テキストに速攻を含む
+            return card.text && card.text.includes('速攻');
+          case 'blocker':
+            // ブロッカー：テキストにブロッカーを含み、ブロッカーを発動を含まない
+            return card.text && card.text.includes('ブロッカー') && !card.text.includes('ブロッカーを発動');
+          case 'blocker_bypass':
+            // ブロッカー貫通：テキストにブロッカーを発動できないを含む
+            return card.text && card.text.includes('ブロッカーを発動できない');
+          case 'trigger':
+            // トリガー：トリガーの項目がある
+            return card.trigger && card.trigger.trim() !== '' && card.trigger !== '-';
+          case 'banish':
+            // バニッシュ：テキストにバニッシュを含む
+            return card.text && card.text.includes('バニッシュ');
+          case 'double_attack':
+            // ダブルアタック：テキストにダブルアタックを含む
+            return card.text && card.text.includes('ダブルアタック');
+          default:
+            return false;
+        }
+      });
+    });
   }
   
   // 13) レアリティフィルタ

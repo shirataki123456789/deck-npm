@@ -35,8 +35,19 @@ export interface FilterOptions {
   free_words: string;
   leader_colors: string[];  // デッキ作成時のリーダー色制限
   parallel_mode: 'normal' | 'parallel' | 'both';
-  has_trigger: boolean | null;  // トリガーフィルター（null=全て, true=あり, false=なし）
+  traits: string[];  // 特性フィルター（バニラ、速攻、ブロッカー等）
 }
+
+// 特性フィルターの種類
+export const TRAIT_FILTERS = [
+  { id: 'vanilla', label: 'バニラ' },
+  { id: 'rush', label: '速攻' },
+  { id: 'blocker', label: 'ブロッカー' },
+  { id: 'blocker_bypass', label: 'ブロッカー貫通' },
+  { id: 'trigger', label: 'トリガー' },
+  { id: 'banish', label: 'バニッシュ' },
+  { id: 'double_attack', label: 'ダブルアタック' },
+] as const;
 
 // デッキの型定義
 export interface Deck {
@@ -103,5 +114,5 @@ export const DEFAULT_FILTER_OPTIONS: FilterOptions = {
   free_words: '',
   leader_colors: [],
   parallel_mode: 'normal',
-  has_trigger: null,  // null = 全て表示
+  traits: [],  // 特性フィルター
 };
