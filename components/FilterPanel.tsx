@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FilterOptions, COLOR_ORDER } from '@/lib/types';
+import { FilterOptions, COLOR_ORDER, TRAIT_FILTERS } from '@/lib/types';
 
 interface FilterMeta {
   colors: string[];
@@ -225,24 +225,25 @@ export default function FilterPanel({
         </div>
       </div>
       
-      {/* トリガー */}
+      {/* 特性 */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          トリガー
+          特性
         </label>
         <div className="flex flex-wrap gap-1">
-          <button
-            onClick={() => updateFilter({ has_trigger: filter.has_trigger === null ? true : (filter.has_trigger === true ? false : null) })}
-            className={`px-3 py-1.5 text-sm rounded border transition-colors ${
-              filter.has_trigger === null
-                ? 'bg-gray-200 text-gray-700 border-gray-300'
-                : filter.has_trigger === true
-                ? 'bg-orange-500 text-white border-orange-500'
-                : 'bg-gray-500 text-white border-gray-500'
-            }`}
-          >
-            {filter.has_trigger === null ? '全て' : filter.has_trigger ? 'トリガーあり' : 'トリガーなし'}
-          </button>
+          {TRAIT_FILTERS.map(trait => (
+            <button
+              key={trait.id}
+              onClick={() => updateFilter({ traits: toggleArrayItem(filter.traits || [], trait.id) })}
+              className={`px-3 py-1.5 text-sm rounded border transition-colors ${
+                (filter.traits || []).includes(trait.id)
+                  ? 'bg-teal-600 text-white border-teal-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {trait.label}
+            </button>
+          ))}
         </div>
       </div>
       
@@ -465,7 +466,7 @@ export default function FilterPanel({
           free_words: '',
           leader_colors: filter.leader_colors, // リーダー色は維持
           parallel_mode: 'normal',
-          has_trigger: null,
+          traits: [],
         })}
         className="w-full btn btn-secondary"
       >
