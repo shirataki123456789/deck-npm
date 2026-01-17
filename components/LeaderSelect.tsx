@@ -48,6 +48,7 @@ function BlankLeaderCanvas({ card, onClick }: { card: Card; onClick?: () => void
 interface LeaderSelectProps {
   onSelect: (card: Card) => void;
   onImport: (text: string) => void;
+  onCancel?: () => void; // リーダー変更をキャンセル
   blankLeaders?: Card[]; // ブランクカードのリーダー
   onCreateBlankLeader?: (card: Card) => void; // ブランクリーダー作成
   onEditBlankLeader?: (card: Card) => void; // ブランクリーダー編集
@@ -57,7 +58,8 @@ interface LeaderSelectProps {
 
 export default function LeaderSelect({ 
   onSelect, 
-  onImport, 
+  onImport,
+  onCancel,
   blankLeaders = [],
   onCreateBlankLeader,
   onEditBlankLeader,
@@ -470,7 +472,17 @@ export default function LeaderSelect({
   
   return (
     <div className="pb-20 lg:pb-4">
-      <h2 className="text-xl font-bold mb-4">① リーダーを選択</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold">① リーダーを選択</h2>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="btn btn-secondary"
+          >
+            ← 戻る
+          </button>
+        )}
+      </div>
       
       {/* インポートセクション */}
       <div className="bg-white rounded-lg shadow p-4 mb-4">

@@ -450,12 +450,14 @@ export default function DeckMode() {
   const totalCards = Object.values(deck.cards).reduce((sum, count) => sum + count, 0);
   
   // リーダー変更（カードは保持したままリーダー選択画面へ）
+  // リーダー情報は保持し、新しいリーダー選択時に更新
   const handleChangeLeader = () => {
-    // リーダーのみクリア、デッキカードは保持
-    setLeaderCard(null);
-    setDeck(prev => ({ ...prev, leader: '' }));
-    // ブランクカードは保持（新リーダー選択時にフィルタリングされる）
     setView('leader');
+  };
+  
+  // リーダー変更キャンセル（元のリーダーのままプレビューに戻る）
+  const handleCancelChangeLeader = () => {
+    setView('preview');
   };
   
   // ドン選択
@@ -691,6 +693,7 @@ export default function DeckMode() {
           <LeaderSelect
             onSelect={handleSelectLeader}
             onImport={handleImportDeck}
+            onCancel={leaderCard ? handleCancelChangeLeader : undefined}
             blankLeaders={blankCards.filter(c => c.type === 'LEADER')}
             onCreateBlankLeader={(card) => {
               setBlankCards(prev => [...prev, card]);

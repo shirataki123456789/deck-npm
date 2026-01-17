@@ -443,14 +443,24 @@ export default function DeckPreview({
                   alt={donCard.name}
                   className="w-full rounded"
                 />
-                {onRemoveDon && (
-                  <button
-                    onClick={onRemoveDon}
-                    className="mt-1 w-full px-1 py-0.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded"
-                  >
-                    削除
-                  </button>
-                )}
+                <div className="mt-1 flex flex-col gap-1">
+                  {onSelectDon && (
+                    <button
+                      onClick={onSelectDon}
+                      className="w-full px-1 py-0.5 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded"
+                    >
+                      変更
+                    </button>
+                  )}
+                  {onRemoveDon && (
+                    <button
+                      onClick={onRemoveDon}
+                      className="w-full px-1 py-0.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded"
+                    >
+                      削除
+                    </button>
+                  )}
+                </div>
               </div>
             ) : onSelectDon ? (
               <button

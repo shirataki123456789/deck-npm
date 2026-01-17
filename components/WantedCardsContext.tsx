@@ -104,6 +104,7 @@ export function WantedCardsProvider({ children }: { children: ReactNode }) {
   
   // ブックマークのトグル
   const toggleBookmark = useCallback((cardId: string) => {
+    if (!cardId) return;
     setBookmarkedCardIds(prev => {
       if (prev.includes(cardId)) {
         return prev.filter(id => id !== cardId);
@@ -114,6 +115,7 @@ export function WantedCardsProvider({ children }: { children: ReactNode }) {
   
   // ブックマークチェック
   const isBookmarked = useCallback((cardId: string) => {
+    if (!cardId) return false;
     return bookmarkedCardIds.includes(cardId);
   }, [bookmarkedCardIds]);
   

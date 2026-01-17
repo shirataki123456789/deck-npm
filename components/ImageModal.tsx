@@ -268,7 +268,7 @@ export default function ImageModal({
                 <p className="text-gray-600 text-sm">{displayCard.card_id}</p>
               </div>
               {/* ブックマークボタン */}
-              {onToggleBookmark && (
+              {onToggleBookmark && displayCard?.card_id && (
                 <button
                   onClick={() => onToggleBookmark(displayCard.card_id)}
                   className={`p-2 rounded-lg text-xl transition-colors flex-shrink-0 ${
@@ -282,7 +282,7 @@ export default function ImageModal({
                 </button>
               )}
               <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
-                {displayCard.color.map(c => (
+                {(displayCard.color || []).map(c => (
                   <span key={c} className={`color-badge color-badge-${c}`}>
                     {c}
                   </span>
@@ -302,7 +302,7 @@ export default function ImageModal({
               {displayCard.counter > 0 && <span>カウンター: +{displayCard.counter}</span>}
             </div>
             
-            {displayCard.features.length > 0 && (
+            {(displayCard.features || []).length > 0 && (
               <div className="mt-2 text-sm">
                 <span className="text-gray-500">特徴: </span>
                 {displayCard.features.join(' / ')}

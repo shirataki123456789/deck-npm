@@ -497,12 +497,13 @@ export default function MultiDeckMode() {
   };
 
   const handleChangeLeader = () => {
-    // リーダーのみクリア、デッキカードは保持
-    updateTab(activeTabId, {
-      leaderCard: null,
-      deck: { ...activeTab.deck, leader: '' },
-      view: 'leader',
-    });
+    // リーダー情報は保持したままview='leader'に移動
+    updateTab(activeTabId, { view: 'leader' });
+  };
+  
+  // リーダー変更キャンセル
+  const handleCancelChangeLeader = () => {
+    updateTab(activeTabId, { view: 'preview' });
   };
   
   // ドン選択
@@ -1229,6 +1230,7 @@ export default function MultiDeckMode() {
             <LeaderSelect
               onSelect={handleSelectLeader}
               onImport={handleImportDeck}
+              onCancel={activeTab.leaderCard ? handleCancelChangeLeader : undefined}
               blankLeaders={activeTab.blankCards.filter(c => c.type === 'LEADER')}
               onCreateBlankLeader={(card) => {
                 updateTab(activeTabId, { blankCards: [...activeTab.blankCards, card] });
