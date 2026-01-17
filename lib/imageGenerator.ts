@@ -793,12 +793,12 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
     }
   }
   
-  // ドンカード描画（リーダーの隣）
+  // ドンカード描画（リーダーの隣、同じ高さ）
   if (donUrl || donCard) {
     const donX = GAP + leaderCroppedWidth + GAP;
-    const donCardHeight = Math.floor(leaderCroppedHeight * 0.6); // リーダーより小さく
+    const donCardHeight = leaderCroppedHeight; // リーダーと同じ高さ
     const donCardWidth = Math.floor(donCardHeight * (400 / 560)); // カードのアスペクト比
-    const donY = Math.floor((UPPER_HEIGHT - donCardHeight) / 2); // 縦中央
+    const donY = 0; // 上端から
     
     if (donUrl) {
       const donImg = await loadImageWithProxy(donUrl);
