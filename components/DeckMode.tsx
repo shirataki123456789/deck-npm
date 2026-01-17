@@ -238,10 +238,10 @@ export default function DeckMode() {
       });
       const data = await res.json();
       
-      // ブランクカードもフィルタして追加（LEADERは除外）
+      // ブランクカードもフィルタして追加（LEADERとDONは除外）
       const filteredBlankCards = blankCards.filter(card => {
-        // LEADERタイプは除外
-        if (card.type === 'LEADER') {
+        // LEADERタイプとDONタイプは除外
+        if (card.type === 'LEADER' || card.type === 'DON') {
           return false;
         }
         // リーダー色フィルタ

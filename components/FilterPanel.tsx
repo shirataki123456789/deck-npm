@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FilterOptions, COLOR_ORDER, TRAIT_FILTERS } from '@/lib/types';
+import { FilterOptions, COLOR_ORDER, TRAIT_FILTERS, TYPE_DISPLAY_NAME } from '@/lib/types';
 
 interface FilterMeta {
   colors: string[];
@@ -219,7 +219,7 @@ export default function FilterPanel({
                   : 'bg-white border-gray-300 hover:bg-gray-50'
               }`}
             >
-              {type}
+              {TYPE_DISPLAY_NAME[type] || type}
             </button>
           ))}
         </div>

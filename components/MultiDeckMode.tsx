@@ -373,7 +373,7 @@ export default function MultiDeckMode() {
       const data = await res.json();
 
       const filteredBlank = blankCards.filter(card => {
-        if (card.type === 'LEADER') return false;
+        if (card.type === 'LEADER' || card.type === 'DON') return false;
         if (leaderColors.length > 0 && !card.color.some(c => leaderColors.includes(c))) return false;
         if (filterOptions.colors.length > 0 && !card.color.some(c => filterOptions.colors.includes(c))) return false;
         if (filterOptions.types.length > 0 && !filterOptions.types.includes(card.type)) return false;
