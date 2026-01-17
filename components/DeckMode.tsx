@@ -90,6 +90,10 @@ export default function DeckMode() {
   const [wantedOnly, setWantedOnly] = useState(false);
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
   
+  // ドン選択用の状態
+  const [donColsCount, setDonColsCount] = useState(6);
+  const [donParallelMode, setDonParallelMode] = useState<'normal' | 'parallel' | 'both'>('both');
+  
   // 必要カードリスト & ブックマーク
   const { 
     updateWantedCount, 
@@ -304,13 +308,13 @@ export default function DeckMode() {
   }, [filter, view, leaderCard, searchCards]);
   
   // ドン選択画面用のカード検索
-  const searchDonCards = useCallback(async () => {
+  const searchDonCards = useCallback(async (parallelMode: 'normal' | 'parallel' | 'both') => {
     setLoading(true);
     try {
       const res = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['DON'], parallel_mode: 'both' }),
+        body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['DON'], parallel_mode: parallelMode }),
       });
       const data = await res.json();
       setFilteredCards(data.cards || []);
@@ -322,12 +326,12 @@ export default function DeckMode() {
     }
   }, []);
   
-  // ドン選択画面に入ったらドンカードを検索
+  // ドン選択画面に入ったらドンカードを検索、パラレルモード変更時も再検索
   useEffect(() => {
     if (view === 'select_don') {
-      searchDonCards();
+      searchDonCards(donParallelMode);
     }
-  }, [view, searchDonCards]);
+  }, [view, donParallelMode, searchDonCards]);
   
   // リーダー選択（既存カードを保持し、新リーダーの色に合うものだけ残す）
   const handleSelectLeader = (card: Card) => {
@@ -958,12 +962,56 @@ export default function DeckMode() {
               </button>
             </div>
             
+            {/* フィルター・表示設定 */}
+            <div className="bg-white rounded-lg shadow p-3 flex flex-wrap gap-4 items-center">
+              {/* パラレルモード切り替え */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">表示:</span>
+                <div className="flex gap-1">
+                  {(['normal', 'parallel', 'both'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setDonParallelMode(mode)}
+                      className={`px-3 py-1 text-sm rounded ${
+                        donParallelMode === mode
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      {mode === 'normal' ? '通常' : mode === 'parallel' ? 'パラレル' : '両方'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* 列数選択 */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">列数:</span>
+                <select
+                  value={donColsCount}
+                  onChange={(e) => setDonColsCount(Number(e.target.value))}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  {[3, 4, 5, 6, 7, 8, 10, 12].map(n => (
+                    <option key={n} value={n}>{n}列</option>
+                  ))}
+                </select>
+              </div>
+              
+              <span className="text-sm text-gray-500">
+                {filteredCards.length}件
+              </span>
+            </div>
+            
             {loading ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+              <div 
+                className="grid gap-2"
+                style={{ gridTemplateColumns: `repeat(${donColsCount}, minmax(0, 1fr))` }}
+              >
                 {filteredCards.map(card => (
                   <div
                     key={card.card_id}
@@ -981,7 +1029,9 @@ export default function DeckMode() {
                         {card.name}
                       </div>
                     )}
-                    <p className="text-xs text-center mt-1 truncate">{card.name}</p>
+                    {donColsCount <= 6 && (
+                      <p className="text-xs text-center mt-1 truncate">{card.name}</p>
+                    )}
                   </div>
                 ))}
               </div>

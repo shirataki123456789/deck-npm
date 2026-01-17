@@ -115,6 +115,10 @@ export default function MultiDeckMode() {
   const [colsCount, setColsCount] = useState(4);
   const [wantedOnly, setWantedOnly] = useState(false);
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
+  
+  // ドン選択用の状態
+  const [donColsCount, setDonColsCount] = useState(6);
+  const [donParallelMode, setDonParallelMode] = useState<'normal' | 'parallel' | 'both'>('both');
 
   // UI状態
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -524,13 +528,13 @@ export default function MultiDeckMode() {
   };
   
   // ドン検索
-  const searchDonCards = useCallback(async () => {
+  const searchDonCards = useCallback(async (parallelMode: 'normal' | 'parallel' | 'both') => {
     setLoading(true);
     try {
       const res = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['DON'], parallel_mode: 'both' }),
+        body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['DON'], parallel_mode: parallelMode }),
       });
       const data = await res.json();
       setFilteredCards(data.cards || []);
@@ -542,12 +546,12 @@ export default function MultiDeckMode() {
     }
   }, []);
   
-  // ドン選択画面に入ったらドンカードを検索
+  // ドン選択画面に入ったらドンカードを検索、パラレルモード変更時も再検索
   useEffect(() => {
     if (activeTab.view === 'select_don') {
-      searchDonCards();
+      searchDonCards(donParallelMode);
     }
-  }, [activeTab.view, searchDonCards]);
+  }, [activeTab.view, donParallelMode, searchDonCards]);
 
   // デッキインポート（DeckModeと同じ処理）
   const handleImportDeck = async (text: string) => {
@@ -1403,13 +1407,57 @@ export default function MultiDeckMode() {
                 </button>
               </div>
               
+              {/* フィルター・表示設定 */}
+              <div className="bg-white rounded-lg shadow p-3 flex flex-wrap gap-4 items-center">
+                {/* パラレルモード切り替え */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">表示:</span>
+                  <div className="flex gap-1">
+                    {(['normal', 'parallel', 'both'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setDonParallelMode(mode)}
+                        className={`px-3 py-1 text-sm rounded ${
+                          donParallelMode === mode
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        {mode === 'normal' ? '通常' : mode === 'parallel' ? 'パラレル' : '両方'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* 列数選択 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">列数:</span>
+                  <select
+                    value={donColsCount}
+                    onChange={(e) => setDonColsCount(Number(e.target.value))}
+                    className="border rounded px-2 py-1 text-sm"
+                  >
+                    {[3, 4, 5, 6, 7, 8, 10, 12].map(n => (
+                      <option key={n} value={n}>{n}列</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <span className="text-sm text-gray-500">
+                  {filteredCards.length}件
+                </span>
+              </div>
+              
               {loading ? (
                 <div className="flex justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
                 </div>
               ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
-                  {filteredCards.filter(c => c.type === 'DON').map(card => (
+                <div 
+                  className="grid gap-2"
+                  style={{ gridTemplateColumns: `repeat(${donColsCount}, minmax(0, 1fr))` }}
+                >
+                  {filteredCards.map(card => (
                     <div
                       key={card.card_id}
                       className="cursor-pointer hover:opacity-80 transition-opacity"
@@ -1426,7 +1474,9 @@ export default function MultiDeckMode() {
                           {card.name}
                         </div>
                       )}
-                      <p className="text-xs text-center mt-1 truncate">{card.name}</p>
+                      {donColsCount <= 6 && (
+                        <p className="text-xs text-center mt-1 truncate">{card.name}</p>
+                      )}
                     </div>
                   ))}
                 </div>

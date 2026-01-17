@@ -48,6 +48,13 @@ export default function CardGrid({
 }: CardGridProps) {
   const [zoomedIndex, setZoomedIndex] = useState<number | null>(null);
   
+  // カード配列が変更された時に、zoomedIndexが範囲外になったらリセット
+  useEffect(() => {
+    if (zoomedIndex !== null && (cards.length === 0 || zoomedIndex >= cards.length)) {
+      setZoomedIndex(null);
+    }
+  }, [cards.length, zoomedIndex]);
+  
   const handleNavigate = (index: number) => {
     setZoomedIndex(index);
   };
@@ -80,12 +87,12 @@ export default function CardGrid({
       
       {/* 画像拡大モーダル（フリック対応） */}
       <ImageModal
-        card={zoomedIndex !== null ? cards[zoomedIndex] : null}
+        card={zoomedIndex !== null && cards[zoomedIndex] ? cards[zoomedIndex] : null}
         onClose={() => setZoomedIndex(null)}
         onUpdateWantedCount={onUpdateWantedCount}
         onUpdateOwnedCount={onUpdateOwnedCount}
-        wantedCount={zoomedIndex !== null && getWantedCount ? getWantedCount(cards[zoomedIndex].card_id) : 0}
-        ownedCount={zoomedIndex !== null && getOwnedCount ? getOwnedCount(cards[zoomedIndex].card_id) : 0}
+        wantedCount={zoomedIndex !== null && cards[zoomedIndex] && getWantedCount ? getWantedCount(cards[zoomedIndex].card_id) : 0}
+        ownedCount={zoomedIndex !== null && cards[zoomedIndex] && getOwnedCount ? getOwnedCount(cards[zoomedIndex].card_id) : 0}
         cards={cards}
         currentIndex={zoomedIndex ?? undefined}
         onNavigate={handleNavigate}
