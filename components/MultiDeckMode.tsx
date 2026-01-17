@@ -10,13 +10,14 @@ import LeaderSelect from './LeaderSelect';
 import BlankCardModal from './BlankCardModal';
 import { useWantedCards } from './WantedCardsContext';
 
-type DeckView = 'leader' | 'preview' | 'add_cards';
+type DeckView = 'leader' | 'preview' | 'add_cards' | 'select_don';
 
 interface DeckTab {
   id: string;
   name: string;
   deck: Deck;
   leaderCard: Card | null;
+  donCard: Card | null;
   view: DeckView;
   blankCards: Card[];
   tags: string[];
@@ -46,6 +47,7 @@ const createNewTab = (name: string): DeckTab => ({
   name,
   deck: { name: '', leader: '', cards: {} },
   leaderCard: null,
+  donCard: null,
   view: 'leader',
   blankCards: [],
   tags: [],
@@ -159,7 +161,7 @@ export default function MultiDeckMode() {
         const pendingData = sessionStorage.getItem('pendingMultiDeckAdd');
         if (!pendingData) return;
         
-        const { deck, leaderCard, blankCards } = JSON.parse(pendingData);
+        const { deck, leaderCard, donCard, blankCards } = JSON.parse(pendingData);
         
         // 新しいタブを作成
         const newTab: DeckTab = {
@@ -167,6 +169,7 @@ export default function MultiDeckMode() {
           name: deck.name || `${leaderCard.name}デッキ`,
           deck,
           leaderCard,
+          donCard: donCard || null,
           view: 'preview',
           blankCards: blankCards || [],
           tags: [],
@@ -501,6 +504,49 @@ export default function MultiDeckMode() {
       view: 'leader',
     });
   };
+  
+  // ドン選択
+  const handleSelectDon = (card: Card) => {
+    updateTab(activeTabId, {
+      donCard: card,
+      deck: { ...activeTab.deck, don: card.card_id },
+      view: 'preview',
+    });
+  };
+  
+  // ドン削除
+  const handleRemoveDon = () => {
+    updateTab(activeTabId, {
+      donCard: null,
+      deck: { ...activeTab.deck, don: undefined },
+    });
+  };
+  
+  // ドン検索
+  const searchDonCards = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['DON'], parallel_mode: 'both' }),
+      });
+      const data = await res.json();
+      setFilteredCards(data.cards || []);
+    } catch (error) {
+      console.error('DON search error:', error);
+      setFilteredCards([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  // ドン選択画面に入ったらドンカードを検索
+  useEffect(() => {
+    if (activeTab.view === 'select_don') {
+      searchDonCards();
+    }
+  }, [activeTab.view, searchDonCards]);
 
   // デッキインポート（DeckModeと同じ処理）
   const handleImportDeck = async (text: string) => {
@@ -515,6 +561,14 @@ export default function MultiDeckMode() {
           const [id, countStr] = part.split('=');
           if (id && countStr) blankCardCounts[id.trim()] = parseInt(countStr.trim(), 10) || 0;
         });
+      }
+      
+      // ドンカード情報を抽出
+      let donCardId: string | null = null;
+      const donMatch = cleanText.match(/#DON:([^\n]+)/m);
+      if (donMatch) {
+        cleanText = cleanText.replace(/\n?#DON:.+$/m, '');
+        donCardId = donMatch[1].trim();
       }
 
       let blankLeaderFromQR: Card | null = null;
@@ -542,6 +596,26 @@ export default function MultiDeckMode() {
           ...data.deck,
           cards: { ...data.deck.cards, ...blankCardCounts },
         };
+        
+        // ドンカードIDを設定
+        if (donCardId) {
+          deckWithBlankCards.don = donCardId;
+        }
+        
+        // ドンカード情報を取得
+        let foundDonCard: Card | null = null;
+        if (donCardId) {
+          foundDonCard = allCards.find(c => c.card_id === donCardId) || null;
+          if (!foundDonCard) {
+            const donRes = await fetch('/api/cards', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['DON'], parallel_mode: 'both' }),
+            });
+            const donData = await donRes.json();
+            foundDonCard = donData.cards?.find((c: Card) => c.card_id === donCardId) || null;
+          }
+        }
 
         // デッキ名があればタブ名を更新、なければ色+リーダー名
         let deckName = data.deck.name || '';
@@ -561,6 +635,7 @@ export default function MultiDeckMode() {
           updateTab(activeTabId, {
             deck: deckWithBlankCards,
             leaderCard: blankLeaderFromQR,
+            donCard: foundDonCard,
             view: 'preview',
             blankCards: newBlankCards,
             name: deckName,
@@ -589,6 +664,7 @@ export default function MultiDeckMode() {
             updateTab(activeTabId, {
               deck: deckWithBlankCards,
               leaderCard: foundLeader,
+              donCard: foundDonCard,
               view: 'preview',
               name: deckName,
             });
@@ -701,6 +777,7 @@ export default function MultiDeckMode() {
             name: tabName,
             deck: deckWithBlankCards,
             leaderCard,
+            donCard: null,
             view: leaderCard ? 'preview' : 'leader',
             blankCards: blankLeaderFromQR ? [blankLeaderFromQR] : [],
             tags: [],
@@ -771,6 +848,7 @@ export default function MultiDeckMode() {
             cards,
           },
           leaderCard,
+          donCard: null,
           view: leaderCard ? 'preview' : 'leader',
           blankCards: [],
           tags: Array.isArray(item.tags) ? item.tags : [],
@@ -1157,11 +1235,14 @@ export default function MultiDeckMode() {
             <DeckPreview
               deck={activeTab.deck}
               leaderCard={activeTab.leaderCard}
+              donCard={activeTab.donCard}
               allCards={[...allCards, ...activeTab.blankCards]}
               onAddCards={() => updateTab(activeTabId, { view: 'add_cards' })}
               onChangeLeader={handleChangeLeader}
               onRemoveCard={handleRemoveCard}
               onAddCard={handleAddCard}
+              onSelectDon={() => updateTab(activeTabId, { view: 'select_don' })}
+              onRemoveDon={handleRemoveDon}
               onEditBlankLeader={(card) => {
                 updateTab(activeTabId, { blankCards: activeTab.blankCards.map(c => c.card_id === card.card_id ? card : c), leaderCard: card });
                 setAllCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
@@ -1290,6 +1371,50 @@ export default function MultiDeckMode() {
               </div>
             </div>
           )}
+          
+          {/* ドン選択画面 */}
+          {activeTab.view === 'select_don' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold">🃏 ドンカードを選択</h2>
+                <button
+                  onClick={() => updateTab(activeTabId, { view: 'preview' })}
+                  className="btn btn-secondary"
+                >
+                  ← 戻る
+                </button>
+              </div>
+              
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+                  {filteredCards.filter(c => c.type === 'DON').map(card => (
+                    <div
+                      key={card.card_id}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => handleSelectDon(card)}
+                    >
+                      {card.image_url ? (
+                        <img
+                          src={card.image_url}
+                          alt={card.name}
+                          className="w-full h-auto rounded shadow"
+                        />
+                      ) : (
+                        <div className="w-full aspect-[5/7] bg-yellow-200 rounded shadow flex items-center justify-center text-xs text-center p-1">
+                          {card.name}
+                        </div>
+                      )}
+                      <p className="text-xs text-center mt-1 truncate">{card.name}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* サイドバー */}
@@ -1305,6 +1430,7 @@ export default function MultiDeckMode() {
               updateTab(activeTabId, updates);
             }}
             leaderCard={activeTab.leaderCard}
+            donCard={activeTab.donCard}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onRemoveCard={handleRemoveCard}

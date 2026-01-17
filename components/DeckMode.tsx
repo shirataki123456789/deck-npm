@@ -11,7 +11,7 @@ import BlankCardModal from './BlankCardModal';
 import CsvEditorMode from './CsvEditorMode';
 import { useWantedCards } from './WantedCardsContext';
 
-type DeckView = 'leader' | 'preview' | 'add_cards';
+type DeckView = 'leader' | 'preview' | 'add_cards' | 'select_don';
 
 interface FilterMeta {
   colors: string[];
@@ -40,6 +40,7 @@ export default function DeckMode() {
     return { name: '', leader: '', cards: {} };
   });
   const [leaderCard, setLeaderCard] = useState<Card | null>(null);
+  const [donCard, setDonCard] = useState<Card | null>(null);  // ドンカード
   
   // 画面状態
   const [view, setView] = useState<DeckView>(() => {
@@ -122,6 +123,16 @@ export default function DeckMode() {
       }
     }
   }, [deck.leader, leaderCard, allCards]);
+  
+  // 初回ロード時にドンカードを復元
+  useEffect(() => {
+    if (deck.don && !donCard && allCards.length > 0) {
+      const don = allCards.find(c => c.card_id === deck.don);
+      if (don) {
+        setDonCard(don);
+      }
+    }
+  }, [deck.don, donCard, allCards]);
   
   // 必要リスト・ブックマークフィルター適用
   const displayCards = useMemo(() => {
@@ -292,6 +303,32 @@ export default function DeckMode() {
     }
   }, [filter, view, leaderCard, searchCards]);
   
+  // ドン選択画面用のカード検索
+  const searchDonCards = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['DON'], parallel_mode: 'both' }),
+      });
+      const data = await res.json();
+      setFilteredCards(data.cards || []);
+    } catch (error) {
+      console.error('DON search error:', error);
+      setFilteredCards([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  // ドン選択画面に入ったらドンカードを検索
+  useEffect(() => {
+    if (view === 'select_don') {
+      searchDonCards();
+    }
+  }, [view, searchDonCards]);
+  
   // リーダー選択（既存カードを保持し、新リーダーの色に合うものだけ残す）
   const handleSelectLeader = (card: Card) => {
     const newLeaderColors = card.color;
@@ -421,6 +458,19 @@ export default function DeckMode() {
     setView('leader');
   };
   
+  // ドン選択
+  const handleSelectDon = (card: Card) => {
+    setDonCard(card);
+    setDeck(prev => ({ ...prev, don: card.card_id }));
+    setView('preview');
+  };
+  
+  // ドン削除
+  const handleRemoveDon = () => {
+    setDonCard(null);
+    setDeck(prev => ({ ...prev, don: undefined }));
+  };
+  
   // マルチデッキに追加
   const handleAddToMultiDeck = () => {
     if (!leaderCard || Object.keys(deck.cards).length === 0) {
@@ -435,6 +485,7 @@ export default function DeckMode() {
     const deckData = {
       deck: { ...deck, name: deckName },
       leaderCard,
+      donCard,
       blankCards: blankCards.filter(c => 
         deck.cards[c.card_id] || c.card_id === deck.leader
       ),
@@ -467,6 +518,16 @@ export default function DeckMode() {
           }
         });
         console.log('Blank card counts from QR:', blankCardCounts);
+      }
+      
+      // ドンカード情報を抽出
+      // フォーマット: #DON:card_id
+      let donCardId: string | null = null;
+      const donMatch = cleanText.match(/#DON:([^\n]+)/m);
+      if (donMatch) {
+        cleanText = cleanText.replace(/\n?#DON:.+$/m, '');
+        donCardId = donMatch[1].trim();
+        console.log('Don card from import:', donCardId);
       }
       
       // ブランクリーダー情報を抽出
@@ -509,7 +570,29 @@ export default function DeckMode() {
           deckWithBlankCards.leader = blankLeaderFromQR.card_id;
         }
         
+        // ドンカードIDを設定
+        if (donCardId) {
+          deckWithBlankCards.don = donCardId;
+        }
+        
         setDeck(deckWithBlankCards);
+        
+        // ドンカード情報を取得して設定
+        if (donCardId) {
+          let foundDon = allCards.find(c => c.card_id === donCardId);
+          if (!foundDon) {
+            const donRes = await fetch('/api/cards', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['DON'], parallel_mode: 'both' }),
+            });
+            const donData = await donRes.json();
+            foundDon = donData.cards?.find((c: Card) => c.card_id === donCardId);
+          }
+          if (foundDon) {
+            setDonCard(foundDon);
+          }
+        }
         
         // リーダーカード情報を取得
         if (blankLeaderFromQR) {
@@ -637,14 +720,18 @@ export default function DeckMode() {
                 📁 マルチデッキに追加
               </button>
             </div>
+            
             <DeckPreview
             deck={deck}
             leaderCard={leaderCard}
+            donCard={donCard}
             allCards={allCards}
             onAddCards={() => setView('add_cards')}
             onChangeLeader={handleChangeLeader}
             onRemoveCard={handleRemoveCard}
             onAddCard={handleAddCard}
+            onSelectDon={() => setView('select_don')}
+            onRemoveDon={handleRemoveDon}
             onEditBlankLeader={(card) => {
               // ブランクリーダー編集後に更新
               setBlankCards(prev => prev.map(c => c.card_id === card.card_id ? card : c));
@@ -854,6 +941,50 @@ export default function DeckMode() {
             </div>
           </div>
         )}
+        
+        {/* ドン選択画面 */}
+        {view === 'select_don' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold">🃏 ドンカードを選択</h2>
+              <button
+                onClick={() => setView('preview')}
+                className="btn btn-secondary"
+              >
+                ← 戻る
+              </button>
+            </div>
+            
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+                {filteredCards.map(card => (
+                  <div
+                    key={card.card_id}
+                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => handleSelectDon(card)}
+                  >
+                    {card.image_url ? (
+                      <img
+                        src={card.image_url}
+                        alt={card.name}
+                        className="w-full h-auto rounded shadow"
+                      />
+                    ) : (
+                      <div className="w-full aspect-[5/7] bg-yellow-200 rounded shadow flex items-center justify-center text-xs text-center p-1">
+                        {card.name}
+                      </div>
+                    )}
+                    <p className="text-xs text-center mt-1 truncate">{card.name}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       
       {/* サイドバー（デッキ情報） */}
@@ -862,6 +993,7 @@ export default function DeckMode() {
           deck={deck}
           setDeck={setDeck}
           leaderCard={leaderCard}
+          donCard={donCard}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           onRemoveCard={handleRemoveCard}

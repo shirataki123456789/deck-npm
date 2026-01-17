@@ -152,9 +152,9 @@ export default function FilterPanel({
     onChange({ ...filter, ...partial });
   };
   
-  // タイプリストからLEADERを除外するかどうか
+  // タイプリストからLEADERとDONを除外するかどうか
   const displayTypes = hideLeaderType 
-    ? meta.types.filter(t => t !== 'LEADER')
+    ? meta.types.filter(t => t !== 'LEADER' && t !== 'DON')
     : meta.types;
   
   return (

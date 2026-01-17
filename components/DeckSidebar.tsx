@@ -10,6 +10,7 @@ interface DeckSidebarProps {
   deck: Deck;
   setDeck: (deck: Deck) => void;
   leaderCard: Card | null;
+  donCard?: Card | null;
   isOpen: boolean;
   onClose: () => void;
   onRemoveCard: (cardId: string) => void;
@@ -33,6 +34,7 @@ export default function DeckSidebar({
   deck,
   setDeck,
   leaderCard,
+  donCard,
   isOpen,
   onClose,
   onRemoveCard,
@@ -188,6 +190,11 @@ export default function DeckSidebar({
         qrText += `\n#LEADER:${leaderEncoded}`;
       }
       
+      // ドンカード情報を追加
+      if (donCard) {
+        qrText += `\n#DON:${donCard.card_id}`;
+      }
+      
       // QRコードをData URLとして生成
       const qrDataUrl = qrText ? await QRCode.toDataURL(qrText, {
         width: 400,
@@ -245,6 +252,8 @@ export default function DeckSidebar({
         leaderUrl: leaderCard.image_url,
         leaderCard: isBlankLeader ? leaderCard : undefined,
         leaderQrDataUrl: undefined, // ブランクリーダー情報はメインQRに含まれる
+        donCard: donCard || undefined,
+        donUrl: donCard?.image_url || undefined,
         cardUrls: [], // 後方互換性のため空配列
         cards: cards.slice(0, 50),
         deckName: deck.name,

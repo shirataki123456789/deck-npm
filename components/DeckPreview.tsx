@@ -72,11 +72,14 @@ function BlankCardCanvas({ card, onClick }: { card: Card; onClick?: () => void }
 interface DeckPreviewProps {
   deck: Deck;
   leaderCard: Card;
+  donCard?: Card | null;  // ドンカード
   allCards: Card[];  // 親からカードデータを受け取る
   onAddCards: () => void;
   onChangeLeader: () => void;
   onRemoveCard: (cardId: string) => void;
   onAddCard: (card: Card) => void;
+  onSelectDon?: () => void;    // ドン選択画面へ
+  onRemoveDon?: () => void;    // ドン削除
   onEditBlankLeader?: (card: Card) => void; // ブランクリーダー編集
   // マルチデッキ用ナビゲーション
   onPrevDeck?: () => void;
@@ -108,11 +111,14 @@ interface DeckStats {
 export default function DeckPreview({
   deck,
   leaderCard,
+  donCard,
   allCards,
   onAddCards,
   onChangeLeader,
   onRemoveCard,
   onAddCard,
+  onSelectDon,
+  onRemoveDon,
   onEditBlankLeader,
   onPrevDeck,
   onNextDeck,
@@ -415,6 +421,7 @@ export default function DeckPreview({
       {/* リーダー情報 */}
       <div className="bg-white rounded-lg shadow p-4 mb-4">
         <div className="flex gap-4">
+          {/* リーダー画像 */}
           <div className="w-24 sm:w-32 flex-shrink-0">
             {isBlankLeader ? (
               <BlankCardCanvas card={leaderCard} />
@@ -426,6 +433,36 @@ export default function DeckPreview({
               />
             )}
           </div>
+          
+          {/* ドン画像 */}
+          <div className="w-16 sm:w-20 flex-shrink-0">
+            {donCard ? (
+              <div>
+                <img
+                  src={donCard.image_url}
+                  alt={donCard.name}
+                  className="w-full rounded"
+                />
+                {onRemoveDon && (
+                  <button
+                    onClick={onRemoveDon}
+                    className="mt-1 w-full px-1 py-0.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded"
+                  >
+                    削除
+                  </button>
+                )}
+              </div>
+            ) : onSelectDon ? (
+              <button
+                onClick={onSelectDon}
+                className="w-full aspect-[5/7] border-2 border-dashed border-yellow-400 rounded flex flex-col items-center justify-center text-yellow-600 hover:bg-yellow-50 transition-colors"
+              >
+                <span className="text-xl">🃏</span>
+                <span className="text-xs">ドン</span>
+              </button>
+            ) : null}
+          </div>
+          
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-lg">{leaderCard.name}</h3>
