@@ -54,6 +54,7 @@ export interface Deck {
   name: string;
   leader: string;           // リーダーのcard_id
   cards: Record<string, number>;  // card_id -> 枚数
+  don?: string;             // ドンカードのcard_id（オプション）
 }
 
 // ソートキーの型定義

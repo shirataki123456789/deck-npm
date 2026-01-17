@@ -575,6 +575,8 @@ export interface DeckImageOptions {
   leaderUrl: string;
   leaderCard?: Card; // ブランクリーダー用
   leaderQrDataUrl?: string; // ブランクリーダー用QRコード
+  donCard?: Card | null; // ドンカード
+  donUrl?: string; // ドンカードの画像URL
   cardUrls: string[];  // 後方互換性のため残す
   cards?: DeckImageCard[];  // 新しい形式（カード情報付き）
   deckName: string;
@@ -591,6 +593,8 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
     leaderUrl,
     leaderCard,
     leaderQrDataUrl,
+    donCard,
+    donUrl,
     cardUrls,
     cards,
     deckName,
@@ -786,6 +790,30 @@ export async function generateDeckImage(options: DeckImageOptions): Promise<Blob
         0, 0, leaderImg.width, srcHeight, // ソースの上半分
         GAP, 0, leaderCroppedWidth, leaderCroppedHeight // 描画先
       );
+    }
+  }
+  
+  // ドンカード描画（リーダーの隣）
+  if (donUrl || donCard) {
+    const donX = GAP + leaderCroppedWidth + GAP;
+    const donCardHeight = Math.floor(leaderCroppedHeight * 0.6); // リーダーより小さく
+    const donCardWidth = Math.floor(donCardHeight * (400 / 560)); // カードのアスペクト比
+    const donY = Math.floor((UPPER_HEIGHT - donCardHeight) / 2); // 縦中央
+    
+    if (donUrl) {
+      const donImg = await loadImageWithProxy(donUrl);
+      if (donImg) {
+        ctx.drawImage(donImg, donX, donY, donCardWidth, donCardHeight);
+      }
+    } else if (donCard) {
+      // ドンカードのプレースホルダー（画像がない場合）
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(donX, donY, donCardWidth, donCardHeight);
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('DON!!', donX + donCardWidth / 2, donY + donCardHeight / 2);
     }
   }
   
