@@ -109,7 +109,7 @@ function loadCSV(filePath: string, isParallel: boolean = false): Card[] {
       trigger: row['トリガー'] || '',
       source: row['入手情報'] || '',
       image_url: imageUrl,
-      is_parallel: isParallel || cardId.includes('_p'),
+      is_parallel: isParallel || /_p\d|_p$/.test(cardId),
       series_id: extractSeriesId(row['入手情報'] || ''),
     };
     
