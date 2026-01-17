@@ -819,6 +819,21 @@ export default function MultiDeckMode() {
             leaderCard = leaderData.cards?.find((c: Card) => c.card_id === item.leader.card_id) || null;
           }
         }
+        
+        // ドンカードを検索
+        let donCard: Card | null = null;
+        if (item.don?.card_id) {
+          donCard = allCards.find(c => c.card_id === item.don.card_id) || null;
+          if (!donCard) {
+            const donRes = await fetch('/api/cards', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...DEFAULT_FILTER_OPTIONS, types: ['DON'], parallel_mode: 'both' }),
+            });
+            const donData = await donRes.json();
+            donCard = donData.cards?.find((c: Card) => c.card_id === item.don.card_id) || null;
+          }
+        }
 
         // デッキ名: item.name → 色+リーダー名 → デフォルト
         let tabName = item.name || '';
@@ -846,9 +861,10 @@ export default function MultiDeckMode() {
             name: tabName,
             leader: item.leader?.card_id || '',
             cards,
+            don: item.don?.card_id,
           },
           leaderCard,
-          donCard: null,
+          donCard,
           view: leaderCard ? 'preview' : 'leader',
           blankCards: [],
           tags: Array.isArray(item.tags) ? item.tags : [],
@@ -1753,6 +1769,10 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
         }),
         total: Object.values(tab.deck.cards).reduce((sum: number, c: number) => sum + c, 0),
       };
+      // ドンカードがある場合は追加
+      if (tab.donCard) {
+        base.don = { card_id: tab.donCard.card_id, name: tab.donCard.name };
+      }
       // タグがある場合のみ追加
       if (tab.tags.length > 0) {
         base.tags = tab.tags;
@@ -1769,7 +1789,12 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
         const res = await fetch('/api/deck', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'export', deck: tab.deck }) });
         const data = await res.json();
         const deckName = tab.deck.name || tab.name || 'デッキ';
-        texts.push(`=== ${deckName} ===\n${data.text || ''}\n`);
+        let text = data.text || '';
+        // ドンカード情報を追加
+        if (tab.donCard) {
+          text += `\n#DON:${tab.donCard.card_id}`;
+        }
+        texts.push(`=== ${deckName} ===\n${text}\n`);
       } catch { texts.push(`=== ${tab.deck.name || tab.name || 'デッキ'} ===\nエラー\n`); }
     }
     downloadFile(texts.join('\n'), `decks_${new Date().toISOString().split('T')[0]}.txt`, 'text/plain');
@@ -1805,7 +1830,12 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
           const exportRes = await fetch('/api/deck', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'export', deck: tab.deck }) });
           const exportData = await exportRes.json();
           if (exportData.text) {
-            const qrRes = await fetch(`/api/qr?text=${encodeURIComponent(exportData.text)}`);
+            let qrText = exportData.text;
+            // ドンカード情報をQRに追加
+            if (tab.donCard) {
+              qrText += `\n#DON:${tab.donCard.card_id}`;
+            }
+            const qrRes = await fetch(`/api/qr?text=${encodeURIComponent(qrText)}`);
             if (qrRes.ok) {
               const blob = await qrRes.blob();
               qrDataUrl = await blobToDataURL(blob);
@@ -1816,6 +1846,8 @@ function BatchExportModal({ tabs, allCards, onClose }: { tabs: DeckTab[]; allCar
         const imageBlob = await generateDeckImage({
           leaderUrl: tab.leaderCard!.image_url || '',
           leaderCard: tab.leaderCard ?? undefined,
+          donCard: tab.donCard ?? undefined,
+          donUrl: tab.donCard?.image_url || undefined,
           cardUrls,
           cards: deckCards,
           deckName: tab.deck.name || tab.name || 'デッキ',

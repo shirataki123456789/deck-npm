@@ -139,7 +139,14 @@ export default function DeckSidebar({
         }),
       });
       const data = await res.json();
-      setExportText(data.text || '');
+      let text = data.text || '';
+      
+      // ドンカード情報を追加
+      if (donCard) {
+        text += `\n#DON:${donCard.card_id}`;
+      }
+      
+      setExportText(text);
       setShowExport(true);
     } catch (error) {
       console.error('Export error:', error);
