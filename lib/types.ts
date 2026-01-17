@@ -84,6 +84,16 @@ export const TYPE_PRIORITY: Record<string, number> = {
   'CHARACTER': 1,
   'EVENT': 2,
   'STAGE': 3,
+  'DON': 4,  // ドンカードは最後
+};
+
+// タイプの日本語表示名
+export const TYPE_DISPLAY_NAME: Record<string, string> = {
+  'LEADER': 'リーダー',
+  'CHARACTER': 'キャラ',
+  'EVENT': 'イベント',
+  'STAGE': 'ステージ',
+  'DON': 'ドン!!',
 };
 
 // 色からHEXカラーコードへのマップ

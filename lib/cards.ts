@@ -15,6 +15,7 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const MAIN_CSV = path.join(DATA_DIR, 'cardlist_filtered.csv');
 const PARALLEL_CSV = path.join(DATA_DIR, 'cardlist_p_only.csv');
 const CUSTOM_CSV = path.join(DATA_DIR, 'custom_cards.csv');
+const DON_CSV = path.join(DATA_DIR, 'don_cards.csv');
 
 // カードデータのキャッシュ
 let cardsCache: Card[] | null = null;
@@ -127,8 +128,9 @@ export function loadAllCards(): Card[] {
   const mainCards = loadCSV(MAIN_CSV, false);
   const parallelCards = loadCSV(PARALLEL_CSV, true);
   const customCards = loadCSV(CUSTOM_CSV, false);
+  const donCards = loadCSV(DON_CSV, false);
   
-  cardsCache = [...mainCards, ...parallelCards, ...customCards];
+  cardsCache = [...mainCards, ...parallelCards, ...customCards, ...donCards];
   return cardsCache;
 }
 
@@ -234,15 +236,15 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
     result = result.filter(c => !c.is_parallel);
   }
   
-  // 2) リーダー色制限（デッキ作成時）
+  // 2) リーダー色制限（デッキ作成時）- DONカードも除外
   if (options.leader_colors.length > 0) {
     result = result.filter(c => {
-      if (c.type === 'LEADER') return false;
+      if (c.type === 'LEADER' || c.type === 'DON') return false;
       return c.color.some(color => options.leader_colors.includes(color));
     });
   }
   
-  // 3) 色フィルタ
+  // 3) 色フィルタ - DONカードは色がないので、色フィルタ時は除外
   if (options.colors.length > 0) {
     result = result.filter(c =>
       c.color.some(color => options.colors.includes(color))
@@ -256,38 +258,38 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
     );
   }
   
-  // 5) コストフィルタ
+  // 5) コストフィルタ - DONカードは除外
   if (options.costs.length > 0) {
     result = result.filter(c =>
-      options.costs.includes(c.cost)
+      c.type === 'DON' ? false : options.costs.includes(c.cost)
     );
   }
   
-  // 6) カウンターフィルタ
+  // 6) カウンターフィルタ - DONカードは除外
   if (options.counters.length > 0) {
     result = result.filter(c =>
-      options.counters.includes(c.counter)
+      c.type === 'DON' ? false : options.counters.includes(c.counter)
     );
   }
   
-  // 6.5) パワーフィルタ
+  // 6.5) パワーフィルタ - DONカードは除外
   if (options.powers.length > 0) {
     result = result.filter(c =>
-      options.powers.includes(c.power)
+      c.type === 'DON' ? false : options.powers.includes(c.power)
     );
   }
   
-  // 7) 属性フィルタ
+  // 7) 属性フィルタ - DONカードは除外
   if (options.attributes.length > 0) {
     result = result.filter(c =>
-      options.attributes.some(attr => c.attribute.includes(attr))
+      c.type === 'DON' ? false : options.attributes.some(attr => c.attribute.includes(attr))
     );
   }
   
-  // 8) ブロックアイコンフィルタ
+  // 8) ブロックアイコンフィルタ - DONカードは除外
   if (options.blocks.length > 0) {
     result = result.filter(c =>
-      options.blocks.includes(c.block_icon)
+      c.type === 'DON' ? false : options.blocks.includes(c.block_icon)
     );
   }
   
@@ -315,9 +317,10 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
     });
   }
   
-  // 12) 特性フィルタ
+  // 12) 特性フィルタ - DONカードは除外
   if (options.traits && options.traits.length > 0) {
     result = result.filter(card => {
+      if (card.type === 'DON') return false;  // DONカードは特性フィルタで除外
       return options.traits.some(trait => {
         switch (trait) {
           case 'vanilla':
@@ -349,10 +352,10 @@ export function filterCards(cards: Card[], options: FilterOptions): Card[] {
     });
   }
   
-  // 13) レアリティフィルタ
+  // 13) レアリティフィルタ - DONカードは除外
   if (options.rarities && options.rarities.length > 0) {
     result = result.filter(c =>
-      options.rarities.includes(c.rarity)
+      c.type === 'DON' ? false : options.rarities.includes(c.rarity)
     );
   }
   
